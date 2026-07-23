@@ -5,9 +5,15 @@ declare(strict_types=1);
 namespace NotificationCompass;
 
 use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Notifications\Events\NotificationSending;
 use Illuminate\Support\ServiceProvider;
+use NotificationCompass\Contracts\NotificationContextResolver;
+use NotificationCompass\Contracts\NotificationPreferenceStore;
 use NotificationCompass\Definitions\NotificationDefinitionRegistry;
+use NotificationCompass\Listeners\NotificationSendingListener;
 use NotificationCompass\Resolution\PreferenceResolver;
+use NotificationCompass\Support\NullNotificationContextResolver;
+use NotificationCompass\Support\NullNotificationPreferenceStore;
 
 final class NotificationCompassServiceProvider extends ServiceProvider
 {
@@ -16,6 +22,8 @@ final class NotificationCompassServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(__DIR__ . '/../config/notificationcompass.php', 'notificationcompass');
 
         $this->app->singleton(NotificationDefinitionRegistry::class);
+        $this->app->singleton(NotificationContextResolver::class, NullNotificationContextResolver::class);
+        $this->app->singleton(NotificationPreferenceStore::class, NullNotificationPreferenceStore::class);
         $this->app->singleton(PreferenceResolver::class, function (Application $app): PreferenceResolver {
             return new PreferenceResolver(
                 $app->make(NotificationDefinitionRegistry::class),
@@ -27,6 +35,8 @@ final class NotificationCompassServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        $this->app['events']->listen(NotificationSending::class, NotificationSendingListener::class);
+
         $this->publishes([
             __DIR__ . '/../config/notificationcompass.php' => config_path('notificationcompass.php'),
         ], 'notificationcompass-config');

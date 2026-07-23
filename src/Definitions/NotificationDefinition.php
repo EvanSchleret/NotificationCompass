@@ -16,6 +16,7 @@ final readonly class NotificationDefinition
         public array $mandatoryChannels = [],
         public bool $optIn = false,
         public array $contextDefaults = [],
+        public ?string $notificationClass = null,
     ) {
         if ($this->key === '') {
             throw new InvalidArgumentException('A notification definition key cannot be empty.');

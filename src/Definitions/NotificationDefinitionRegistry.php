@@ -31,6 +31,17 @@ final class NotificationDefinitionRegistry
         return isset($this->definitions[$key]);
     }
 
+    public function forNotification(object $notification): ?NotificationDefinition
+    {
+        foreach ($this->definitions as $definition) {
+            if ($definition->notificationClass !== null && $notification instanceof $definition->notificationClass) {
+                return $definition;
+            }
+        }
+
+        return null;
+    }
+
     /** @return array<string, NotificationDefinition> */
     public function all(): array
     {
