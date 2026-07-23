@@ -1,0 +1,43 @@
+{
+    "name": "evanschleret/notificationcompass",
+    "description": "Context-aware notification preferences for Laravel applications.",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Evan Schleret",
+            "homepage": "https://github.com/EvanSchleret"
+        }
+    ],
+    "require": {
+        "php": "^8.2",
+        "illuminate/support": "^10.0|^11.0|^12.0"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^8.0|^9.0|^10.0",
+        "phpunit/phpunit": "^10.0|^11.0|^12.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "NotificationCompass\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "NotificationCompass\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "NotificationCompass\\NotificationCompassServiceProvider"
+            ]
+        }
+    },
+    "scripts": {
+        "test": "phpunit",
+        "lint": "find src tests -name '*.php' -print0 | xargs -0 -n1 php -l"
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
