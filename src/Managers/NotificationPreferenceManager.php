@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace NotificationCompass\Managers;
 
 use NotificationCompass\Contracts\MutableNotificationPreferenceStore;
+use NotificationCompass\Definitions\NotificationDefinition;
+use NotificationCompass\Definitions\NotificationDefinitionRegistry;
 use NotificationCompass\Resolution\PreferenceResolver;
 use NotificationCompass\Resolution\ResolvedPreference;
 use NotificationCompass\ValueObjects\NotificationContext;
@@ -15,6 +17,7 @@ final readonly class NotificationPreferenceManager
         private object $notifiable,
         private MutableNotificationPreferenceStore $store,
         private PreferenceResolver $resolver,
+        private NotificationDefinitionRegistry $definitions,
     ) {
     }
 
@@ -31,6 +34,16 @@ final readonly class NotificationPreferenceManager
         ?NotificationContext $context = null,
     ): NotificationPreferenceSelection {
         return new NotificationPreferenceSelection($this, $notificationKey, $context);
+    }
+
+    public function definition(string $notificationKey): NotificationDefinition
+    {
+        return $this->definitions->get($notificationKey);
+    }
+
+    public function definitions(): array
+    {
+        return $this->definitions->all();
     }
 
     public function disable(

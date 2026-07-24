@@ -34,6 +34,10 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
                 'channels' => ['mail'],
                 'notification_class' => TestConfiguredNotification::class,
             ],
+            'security.alert' => [
+                'channels' => ['mail', 'database'],
+                'mandatory_channels' => ['mail'],
+            ],
         ]);
     }
 
@@ -83,6 +87,27 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
 
         self::assertSame(['mail'], $definition->channels);
         self::assertSame(TestConfiguredNotification::class, $definition->notificationClass);
+    }
+
+    public function test_inspection_api_exposes_channels_and_rules(): void
+    {
+        $user = TestUser::query()->create();
+        $selection = $user->notificationPreferences()->for('security.alert');
+
+        self::assertSame(['mail', 'database'], $selection->channels());
+        self::assertTrue($selection->isMandatory('mail'));
+        self::assertFalse($selection->isModifiable('mail'));
+        self::assertFalse($selection->isMandatory('database'));
+        self::assertTrue($selection->isModifiable('database'));
+    }
+
+    public function test_notification_context_can_round_trip_through_arrays_and_json(): void
+    {
+        $context = new NotificationContext('organization', 42, ['name' => 'Acme']);
+        $restored = NotificationContext::fromArray($context->toArray());
+
+        self::assertSame('organization:42', $restored->key());
+        self::assertSame($context->toArray(), json_decode((string) json_encode($context), true));
     }
 }
 

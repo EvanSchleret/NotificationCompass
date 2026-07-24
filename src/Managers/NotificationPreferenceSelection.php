@@ -40,4 +40,19 @@ final readonly class NotificationPreferenceSelection
     {
         return $this->manager->effective($this->notificationKey, $channel, $this->context);
     }
+
+    public function channels(): array
+    {
+        return $this->manager->definition($this->notificationKey)->channels;
+    }
+
+    public function isMandatory(string $channel): bool
+    {
+        return $this->manager->definition($this->notificationKey)->isMandatoryFor($channel);
+    }
+
+    public function isModifiable(string $channel): bool
+    {
+        return ! $this->isMandatory($channel);
+    }
 }

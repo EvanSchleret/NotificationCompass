@@ -6,6 +6,7 @@ namespace NotificationCompass\Concerns;
 
 use NotificationCompass\Contracts\MutableNotificationPreferenceStore;
 use NotificationCompass\Managers\NotificationPreferenceManager;
+use NotificationCompass\Definitions\NotificationDefinitionRegistry;
 use NotificationCompass\Resolution\NotificationGate;
 use NotificationCompass\Resolution\PreferenceResolver;
 use NotificationCompass\ValueObjects\NotificationContext;
@@ -18,6 +19,7 @@ trait HasNotificationPreferences
             $this,
             app(MutableNotificationPreferenceStore::class),
             app(PreferenceResolver::class),
+            app(NotificationDefinitionRegistry::class),
         );
     }
 
@@ -43,6 +45,22 @@ trait HasNotificationPreferences
         ?\NotificationCompass\ValueObjects\NotificationContext $context = null,
     ): void {
         $this->notificationPreferences()->reset($notificationKey, $channel, $context);
+    }
+
+    public function notificationPreference(
+        string $notificationKey,
+        string $channel,
+        ?NotificationContext $context = null,
+    ): ?bool {
+        return $this->notificationPreferences()->explicit($notificationKey, $channel, $context);
+    }
+
+    public function effectiveNotificationPreference(
+        string $notificationKey,
+        string $channel,
+        ?NotificationContext $context = null,
+    ): \NotificationCompass\Resolution\ResolvedPreference {
+        return $this->notificationPreferences()->effective($notificationKey, $channel, $context);
     }
 
     public function canReceiveNotification(
