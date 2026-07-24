@@ -8,6 +8,20 @@ use InvalidArgumentException;
 
 final readonly class NotificationDefinition
 {
+    public static function fromConfig(string $key, array $attributes): self
+    {
+        return new self(
+            key: $key,
+            channels: $attributes['channels'] ?? [],
+            defaults: $attributes['defaults'] ?? [],
+            mandatory: (bool) ($attributes['mandatory'] ?? false),
+            mandatoryChannels: $attributes['mandatory_channels'] ?? [],
+            optIn: (bool) ($attributes['opt_in'] ?? false),
+            contextDefaults: $attributes['context_defaults'] ?? [],
+            notificationClass: $attributes['notification_class'] ?? null,
+        );
+    }
+
     public function __construct(
         public string $key,
         public array $channels,

@@ -10,10 +10,12 @@ use Illuminate\Support\ServiceProvider;
 use NotificationCompass\Contracts\NotificationContextResolver;
 use NotificationCompass\Contracts\NotificationPreferenceStore;
 use NotificationCompass\Contracts\MutableNotificationPreferenceStore;
+use NotificationCompass\Definitions\NotificationDefinition;
 use NotificationCompass\Definitions\NotificationDefinitionRegistry;
 use NotificationCompass\Listeners\NotificationSendingListener;
 use NotificationCompass\Resolution\PreferenceResolver;
 use NotificationCompass\Stores\EloquentNotificationPreferenceStore;
+use NotificationCompass\Support\NullNotificationContextResolver;
 
 final class NotificationCompassServiceProvider extends ServiceProvider
 {
@@ -22,6 +24,7 @@ final class NotificationCompassServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(__DIR__ . '/../config/notificationcompass.php', 'notificationcompass');
 
         $this->app->singleton(NotificationDefinitionRegistry::class);
+        $this->registerConfiguredDefinitions();
         $this->app->singleton(NotificationContextResolver::class, NullNotificationContextResolver::class);
         $this->app->singleton(MutableNotificationPreferenceStore::class, EloquentNotificationPreferenceStore::class);
         $this->app->alias(MutableNotificationPreferenceStore::class, NotificationPreferenceStore::class);
@@ -32,6 +35,17 @@ final class NotificationCompassServiceProvider extends ServiceProvider
                 (bool) $app['config']->get('notificationcompass.default', false),
             );
         });
+    }
+
+    private function registerConfiguredDefinitions(): void
+    {
+        $registry = $this->app->make(NotificationDefinitionRegistry::class);
+
+        foreach ((array) config('notificationcompass.definitions', []) as $key => $attributes) {
+            if (is_array($attributes)) {
+                $registry->register(NotificationDefinition::fromConfig((string) $key, $attributes));
+            }
+        }
     }
 
     public function boot(): void

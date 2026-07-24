@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use NotificationCompass\Concerns\HasNotificationPreferences;
+use NotificationCompass\Definitions\NotificationDefinitionRegistry;
 use NotificationCompass\NotificationCompassServiceProvider;
 use NotificationCompass\Stores\EloquentNotificationPreferenceStore;
 use NotificationCompass\ValueObjects\NotificationContext;
@@ -27,6 +28,12 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
             'driver' => 'sqlite',
             'database' => ':memory:',
             'prefix' => '',
+        ]);
+        $app['config']->set('notificationcompass.definitions', [
+            'event.booking_created' => [
+                'channels' => ['mail'],
+                'notification_class' => TestConfiguredNotification::class,
+            ],
         ]);
     }
 
@@ -64,6 +71,21 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
             ->for('event.booking_created', $project)
             ->explicit('mail'));
     }
+
+    public function test_definitions_are_loaded_from_configuration(): void
+    {
+        (new NotificationCompassServiceProvider($this->app))->register();
+
+        $definition = $this->app->make(NotificationDefinitionRegistry::class)
+            ->get('event.booking_created');
+
+        self::assertSame(['mail'], $definition->channels);
+        self::assertSame(TestConfiguredNotification::class, $definition->notificationClass);
+    }
+}
+
+final class TestConfiguredNotification
+{
 }
 
 final class TestUser extends Model
