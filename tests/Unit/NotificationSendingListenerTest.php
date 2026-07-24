@@ -11,6 +11,7 @@ use NotificationCompass\Definitions\NotificationDefinition;
 use NotificationCompass\Definitions\NotificationDefinitionRegistry;
 use NotificationCompass\Listeners\NotificationSendingListener;
 use NotificationCompass\Resolution\PreferenceResolver;
+use NotificationCompass\Resolution\NotificationGate;
 use NotificationCompass\ValueObjects\NotificationContext;
 use PHPUnit\Framework\TestCase;
 
@@ -25,12 +26,12 @@ final class NotificationSendingListenerTest extends TestCase
             notificationClass: TestNotification::class,
         ));
 
-        $listener = new NotificationSendingListener(
+        $listener = new NotificationSendingListener(new NotificationGate(
             $registry,
             new TestContextResolver(),
             new TestPreferenceStore(false),
             new PreferenceResolver($registry, [], false),
-        );
+        ));
 
         $allowed = $listener->handle(new NotificationSending(new TestNotifiable(), new TestNotification(), 'mail'));
 
@@ -40,16 +41,37 @@ final class NotificationSendingListenerTest extends TestCase
     public function test_unregistered_notification_is_not_intercepted(): void
     {
         $registry = new NotificationDefinitionRegistry();
-        $listener = new NotificationSendingListener(
+        $listener = new NotificationSendingListener(new NotificationGate(
             $registry,
             new TestContextResolver(),
             new TestPreferenceStore(false),
             new PreferenceResolver($registry, [], false),
-        );
+        ));
 
         $allowed = $listener->handle(new NotificationSending(new TestNotifiable(), new TestNotification(), 'mail'));
 
         self::assertTrue($allowed);
+    }
+
+    public function test_undeclared_channels_are_not_delivered(): void
+    {
+        $registry = new NotificationDefinitionRegistry();
+        $registry->register(new NotificationDefinition(
+            'message.received',
+            ['database'],
+            notificationClass: TestNotification::class,
+        ));
+
+        $listener = new NotificationSendingListener(new NotificationGate(
+            $registry,
+            new TestContextResolver(),
+            new TestPreferenceStore(true),
+            new PreferenceResolver($registry, [], false),
+        ));
+
+        $allowed = $listener->handle(new NotificationSending(new TestNotifiable(), new TestNotification(), 'mail'));
+
+        self::assertFalse($allowed);
     }
 }
 

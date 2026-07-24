@@ -14,6 +14,7 @@ use NotificationCompass\Definitions\NotificationDefinition;
 use NotificationCompass\Definitions\NotificationDefinitionRegistry;
 use NotificationCompass\Listeners\NotificationSendingListener;
 use NotificationCompass\Resolution\PreferenceResolver;
+use NotificationCompass\Resolution\NotificationGate;
 use NotificationCompass\Stores\EloquentNotificationPreferenceStore;
 use NotificationCompass\Support\NullNotificationContextResolver;
 
@@ -24,7 +25,6 @@ final class NotificationCompassServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(__DIR__ . '/../config/notificationcompass.php', 'notificationcompass');
 
         $this->app->singleton(NotificationDefinitionRegistry::class);
-        $this->registerConfiguredDefinitions();
         $this->app->singleton(NotificationContextResolver::class, NullNotificationContextResolver::class);
         $this->app->singleton(MutableNotificationPreferenceStore::class, EloquentNotificationPreferenceStore::class);
         $this->app->alias(MutableNotificationPreferenceStore::class, NotificationPreferenceStore::class);
@@ -35,6 +35,7 @@ final class NotificationCompassServiceProvider extends ServiceProvider
                 (bool) $app['config']->get('notificationcompass.default', false),
             );
         });
+        $this->app->singleton(NotificationGate::class);
     }
 
     private function registerConfiguredDefinitions(): void
@@ -50,6 +51,7 @@ final class NotificationCompassServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        $this->registerConfiguredDefinitions();
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
         $this->app['events']->listen(NotificationSending::class, NotificationSendingListener::class);
 

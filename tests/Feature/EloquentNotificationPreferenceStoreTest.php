@@ -70,12 +70,14 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
         self::assertTrue($user->notificationPreferences()
             ->for('event.booking_created', $project)
             ->explicit('mail'));
+
+        self::assertFalse($user->canReceiveNotification(new TestConfiguredNotification(), 'mail'));
+        $user->enableNotification('event.booking_created', 'mail');
+        self::assertTrue($user->canReceiveNotification(new TestConfiguredNotification(), 'mail'));
     }
 
     public function test_definitions_are_loaded_from_configuration(): void
     {
-        (new NotificationCompassServiceProvider($this->app))->register();
-
         $definition = $this->app->make(NotificationDefinitionRegistry::class)
             ->get('event.booking_created');
 
