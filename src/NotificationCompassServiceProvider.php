@@ -17,7 +17,7 @@ use NotificationCompass\Listeners\NotificationSendingListener;
 use NotificationCompass\Resolution\PreferenceResolver;
 use NotificationCompass\Resolution\NotificationGate;
 use NotificationCompass\Stores\EloquentNotificationPreferenceStore;
-use NotificationCompass\Support\NullNotificationContextResolver;
+use NotificationCompass\Support\ConventionNotificationContextResolver;
 
 final class NotificationCompassServiceProvider extends ServiceProvider
 {
@@ -26,7 +26,7 @@ final class NotificationCompassServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(__DIR__ . '/../config/notificationcompass.php', 'notificationcompass');
 
         $this->app->singleton(NotificationDefinitionRegistry::class);
-        $this->app->singleton(NotificationContextResolver::class, NullNotificationContextResolver::class);
+        $this->app->singleton(NotificationContextResolver::class, ConventionNotificationContextResolver::class);
         $this->app->singleton(MutableNotificationPreferenceStore::class, EloquentNotificationPreferenceStore::class);
         $this->app->alias(MutableNotificationPreferenceStore::class, NotificationPreferenceStore::class);
         $this->app->singleton(PreferenceResolver::class, function (Application $app): PreferenceResolver {

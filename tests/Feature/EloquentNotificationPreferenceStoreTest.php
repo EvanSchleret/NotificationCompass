@@ -42,6 +42,10 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
                 'channels' => ['mail', 'database'],
                 'mandatory_channels' => ['mail'],
             ],
+            'event.contextual' => [
+                'channels' => ['mail'],
+                'notification_class' => TestContextualNotification::class,
+            ],
         ]);
         $app['config']->set('notificationcompass.definition_providers', [TestDefinitionProvider::class]);
     }
@@ -131,10 +135,28 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $user->enableNotification('security.alert', 'push');
     }
+
+    public function test_context_is_resolved_from_the_notification_convention(): void
+    {
+        $user = TestUser::query()->create();
+        $context = new NotificationContext('organization', 7);
+        $store = new EloquentNotificationPreferenceStore();
+        $store->set($user, 'event.booking_created', 'mail', false, $context);
+
+        self::assertFalse($user->canReceiveNotification(new TestContextualNotification(), 'mail'));
+    }
 }
 
 final class TestConfiguredNotification
 {
+}
+
+final class TestContextualNotification
+{
+    public function notificationContext(object $notifiable): NotificationContext
+    {
+        return new NotificationContext('organization', 7);
+    }
 }
 
 final class TestDefinitionProvider implements NotificationDefinitionProvider
