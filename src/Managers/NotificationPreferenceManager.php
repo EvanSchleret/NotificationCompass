@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace NotificationCompass\Managers;
 
 use NotificationCompass\Contracts\MutableNotificationPreferenceStore;
+use NotificationCompass\Contracts\InspectableNotificationPreferenceStore;
 use NotificationCompass\Definitions\NotificationDefinition;
 use NotificationCompass\Definitions\NotificationDefinitionRegistry;
 use NotificationCompass\Resolution\PreferenceResolver;
@@ -47,6 +48,36 @@ final readonly class NotificationPreferenceManager
     public function definitions(): array
     {
         return $this->definitions->all();
+    }
+
+    public function explicitPreferences(): array
+    {
+        if (! $this->store instanceof InspectableNotificationPreferenceStore) {
+            return [];
+        }
+
+        return $this->store->all($this->notifiable);
+    }
+
+    public function effectivePreferences(?NotificationContext $context = null): array
+    {
+        $preferences = [];
+
+        foreach ($this->definitions->all() as $definition) {
+            if (! $definition->supportsContext($context)) {
+                continue;
+            }
+
+            foreach ($definition->channels as $channel) {
+                $preferences[$definition->key][$channel] = $this->effective(
+                    $definition->key,
+                    $channel,
+                    $context,
+                );
+            }
+        }
+
+        return $preferences;
     }
 
     public function disable(

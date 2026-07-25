@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace NotificationCompass\Definitions;
 
 use InvalidArgumentException;
+use NotificationCompass\ValueObjects\NotificationContext;
 
 final readonly class NotificationDefinition
 {
@@ -84,5 +85,12 @@ final readonly class NotificationDefinition
     public function isHidden(string $channel): bool
     {
         return (bool) ($this->channelOptions[$channel]['hidden'] ?? false);
+    }
+
+    public function supportsContext(?NotificationContext $context): bool
+    {
+        return $context === null
+            || $this->supportedContexts === []
+            || in_array($context->type, $this->supportedContexts, true);
     }
 }

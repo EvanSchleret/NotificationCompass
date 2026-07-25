@@ -35,6 +35,9 @@ final readonly class NotificationGate
         }
 
         $resolvedContext = $context ?? $this->contexts->resolve($notification, $notifiable);
+        if (! $definition->supportsContext($resolvedContext)) {
+            return new ResolvedPreference(false, 'context_unavailable');
+        }
 
         return $this->resolver->resolve(
             $notifiable,

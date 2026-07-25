@@ -7,10 +7,11 @@ namespace NotificationCompass\Stores;
 use Illuminate\Database\Eloquent\Model;
 use InvalidArgumentException;
 use NotificationCompass\Contracts\MutableNotificationPreferenceStore;
+use NotificationCompass\Contracts\InspectableNotificationPreferenceStore;
 use NotificationCompass\Models\NotificationPreference;
 use NotificationCompass\ValueObjects\NotificationContext;
 
-final class EloquentNotificationPreferenceStore implements MutableNotificationPreferenceStore
+final class EloquentNotificationPreferenceStore implements MutableNotificationPreferenceStore, InspectableNotificationPreferenceStore
 {
     public function get(
         object $notifiable,
@@ -58,6 +59,22 @@ final class EloquentNotificationPreferenceStore implements MutableNotificationPr
             ->where('channel', $channel)
             ->where('context_key', $this->contextKey($context))
             ->delete();
+    }
+
+    public function all(object $notifiable): array
+    {
+        return NotificationPreference::query()
+            ->where($this->identity($notifiable))
+            ->orderBy('notification_key')
+            ->orderBy('channel')
+            ->get(['notification_key', 'channel', 'context_key', 'enabled'])
+            ->map(static fn (NotificationPreference $preference): array => [
+                'notification_key' => $preference->notification_key,
+                'channel' => $preference->channel,
+                'context_key' => $preference->context_key,
+                'enabled' => $preference->enabled,
+            ])
+            ->all();
     }
 
     private function identity(object $notifiable): array

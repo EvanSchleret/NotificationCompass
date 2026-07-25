@@ -48,6 +48,7 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
             'event.contextual' => [
                 'channels' => ['mail'],
                 'notification_class' => TestContextualNotification::class,
+                'supported_contexts' => ['organization'],
             ],
         ]);
         $app['config']->set('notificationcompass.definition_providers', [TestDefinitionProvider::class]);
@@ -148,6 +149,28 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
         $store->set($user, 'event.booking_created', 'mail', false, $context);
 
         self::assertFalse($user->canReceiveNotification(new TestContextualNotification(), 'mail'));
+    }
+
+    public function test_explicit_and_effective_preferences_are_inspectable(): void
+    {
+        $user = TestUser::query()->create();
+        $user->disableNotification('event.booking_created', 'mail');
+
+        $explicit = $user->notificationPreferences()->explicitPreferences();
+        $effective = $user->notificationPreferences()->effectivePreferences();
+
+        self::assertSame(false, $explicit[0]['enabled']);
+        self::assertFalse($effective['event.booking_created']['mail']->enabled);
+        self::assertSame('user_global', $effective['event.booking_created']['mail']->source);
+    }
+
+    public function test_context_types_outside_a_definition_are_rejected(): void
+    {
+        $user = TestUser::query()->create();
+        $notification = new TestContextualNotification();
+        $context = new NotificationContext('project', 7);
+
+        self::assertFalse($user->canReceiveNotification($notification, 'mail', $context));
     }
 }
 
