@@ -9,10 +9,14 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use NotificationCompass\Concerns\HasNotificationPreferences;
 use NotificationCompass\Definitions\NotificationDefinitionRegistry;
+use NotificationCompass\Contracts\NotificationDefinitionProvider;
+use NotificationCompass\Definitions\NotificationDefinition;
 use NotificationCompass\NotificationCompassServiceProvider;
 use NotificationCompass\Stores\EloquentNotificationPreferenceStore;
 use NotificationCompass\ValueObjects\NotificationContext;
 use Orchestra\Testbench\TestCase;
+use InvalidArgumentException;
+use LogicException;
 
 final class EloquentNotificationPreferenceStoreTest extends TestCase
 {
@@ -39,6 +43,7 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
                 'mandatory_channels' => ['mail'],
             ],
         ]);
+        $app['config']->set('notificationcompass.definition_providers', [TestDefinitionProvider::class]);
     }
 
     protected function defineDatabaseMigrations(): void
@@ -87,6 +92,7 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
 
         self::assertSame(['mail'], $definition->channels);
         self::assertSame(TestConfiguredNotification::class, $definition->notificationClass);
+        self::assertTrue($this->app->make(NotificationDefinitionRegistry::class)->has('digest.weekly'));
     }
 
     public function test_inspection_api_exposes_channels_and_rules(): void
@@ -109,10 +115,34 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
         self::assertSame('organization:42', $restored->key());
         self::assertSame($context->toArray(), json_decode((string) json_encode($context), true));
     }
+
+    public function test_user_cannot_write_unknown_or_mandatory_channels(): void
+    {
+        $user = TestUser::query()->create();
+
+        $this->expectException(LogicException::class);
+        $user->enableNotification('security.alert', 'mail');
+    }
+
+    public function test_user_cannot_write_an_undeclared_channel(): void
+    {
+        $user = TestUser::query()->create();
+
+        $this->expectException(InvalidArgumentException::class);
+        $user->enableNotification('security.alert', 'push');
+    }
 }
 
 final class TestConfiguredNotification
 {
+}
+
+final class TestDefinitionProvider implements NotificationDefinitionProvider
+{
+    public function register(NotificationDefinitionRegistry $registry): void
+    {
+        $registry->register(new NotificationDefinition('digest.weekly', ['mail'], optIn: true));
+    }
 }
 
 final class TestUser extends Model

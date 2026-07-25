@@ -8,6 +8,7 @@ use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Notifications\Events\NotificationSending;
 use Illuminate\Support\ServiceProvider;
 use NotificationCompass\Contracts\NotificationContextResolver;
+use NotificationCompass\Contracts\NotificationDefinitionProvider;
 use NotificationCompass\Contracts\NotificationPreferenceStore;
 use NotificationCompass\Contracts\MutableNotificationPreferenceStore;
 use NotificationCompass\Definitions\NotificationDefinition;
@@ -46,6 +47,17 @@ final class NotificationCompassServiceProvider extends ServiceProvider
             if (is_array($attributes)) {
                 $registry->register(NotificationDefinition::fromConfig((string) $key, $attributes));
             }
+        }
+
+        foreach ((array) config('notificationcompass.definition_providers', []) as $providerClass) {
+            $provider = $this->app->make($providerClass);
+            if (! $provider instanceof NotificationDefinitionProvider) {
+                throw new \InvalidArgumentException(
+                    "Definition provider [{$providerClass}] must implement NotificationDefinitionProvider.",
+                );
+            }
+
+            $provider->register($registry);
         }
     }
 

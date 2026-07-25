@@ -10,6 +10,8 @@ use NotificationCompass\Definitions\NotificationDefinitionRegistry;
 use NotificationCompass\Resolution\PreferenceResolver;
 use NotificationCompass\Resolution\ResolvedPreference;
 use NotificationCompass\ValueObjects\NotificationContext;
+use InvalidArgumentException;
+use LogicException;
 
 final readonly class NotificationPreferenceManager
 {
@@ -26,6 +28,7 @@ final readonly class NotificationPreferenceManager
         string $channel,
         ?NotificationContext $context = null,
     ): void {
+        $this->assertModifiable($notificationKey, $channel);
         $this->store->set($this->notifiable, $notificationKey, $channel, true, $context);
     }
 
@@ -51,6 +54,7 @@ final readonly class NotificationPreferenceManager
         string $channel,
         ?NotificationContext $context = null,
     ): void {
+        $this->assertModifiable($notificationKey, $channel);
         $this->store->set($this->notifiable, $notificationKey, $channel, false, $context);
     }
 
@@ -59,6 +63,7 @@ final readonly class NotificationPreferenceManager
         string $channel,
         ?NotificationContext $context = null,
     ): void {
+        $this->assertModifiable($notificationKey, $channel);
         $this->store->forget($this->notifiable, $notificationKey, $channel, $context);
     }
 
@@ -82,5 +87,22 @@ final readonly class NotificationPreferenceManager
             $context,
             $this->store,
         );
+    }
+
+    private function assertModifiable(string $notificationKey, string $channel): void
+    {
+        $definition = $this->definition($notificationKey);
+
+        if (! $definition->hasChannel($channel)) {
+            throw new InvalidArgumentException(
+                "Channel [{$channel}] is not available for notification type [{$notificationKey}].",
+            );
+        }
+
+        if ($definition->isMandatoryFor($channel)) {
+            throw new LogicException(
+                "Channel [{$channel}] is mandatory for notification type [{$notificationKey}].",
+            );
+        }
     }
 }
