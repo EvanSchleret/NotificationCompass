@@ -41,6 +41,9 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
             'security.alert' => [
                 'channels' => ['mail', 'database'],
                 'mandatory_channels' => ['mail'],
+                'channel_options' => [
+                    'database' => ['hidden' => true, 'default' => true],
+                ],
             ],
             'event.contextual' => [
                 'channels' => ['mail'],
@@ -109,6 +112,7 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
         self::assertFalse($selection->isModifiable('mail'));
         self::assertFalse($selection->isMandatory('database'));
         self::assertTrue($selection->isModifiable('database'));
+        self::assertTrue($selection->isHidden('database'));
     }
 
     public function test_notification_context_can_round_trip_through_arrays_and_json(): void

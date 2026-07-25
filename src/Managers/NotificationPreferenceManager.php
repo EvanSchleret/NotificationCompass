@@ -99,9 +99,9 @@ final readonly class NotificationPreferenceManager
             );
         }
 
-        if ($definition->isMandatoryFor($channel)) {
+        if (! $definition->isModifiableFor($channel)) {
             throw new LogicException(
-                "Channel [{$channel}] is mandatory for notification type [{$notificationKey}].",
+                "Channel [{$channel}] cannot be modified for notification type [{$notificationKey}].",
             );
         }
     }

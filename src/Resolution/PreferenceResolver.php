@@ -51,7 +51,12 @@ final readonly class PreferenceResolver
             return new ResolvedPreference($definition->defaults[$channel], 'type_default');
         }
 
-        if ($definition->optIn) {
+        $channelDefault = $definition->channelDefault($channel);
+        if ($channelDefault !== null) {
+            return new ResolvedPreference($channelDefault, 'channel_definition_default');
+        }
+
+        if ($definition->isOptInFor($channel)) {
             return new ResolvedPreference(false, 'opt_in_default');
         }
 

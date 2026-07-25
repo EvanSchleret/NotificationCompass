@@ -53,6 +53,11 @@ final readonly class NotificationPreferenceSelection
 
     public function isModifiable(string $channel): bool
     {
-        return ! $this->isMandatory($channel);
+        return $this->manager->definition($this->notificationKey)->isModifiableFor($channel);
+    }
+
+    public function isHidden(string $channel): bool
+    {
+        return $this->manager->definition($this->notificationKey)->isHidden($channel);
     }
 }

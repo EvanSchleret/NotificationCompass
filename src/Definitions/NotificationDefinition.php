@@ -19,6 +19,12 @@ final readonly class NotificationDefinition
             optIn: (bool) ($attributes['opt_in'] ?? false),
             contextDefaults: $attributes['context_defaults'] ?? [],
             notificationClass: $attributes['notification_class'] ?? null,
+            name: $attributes['name'] ?? null,
+            description: $attributes['description'] ?? null,
+            category: $attributes['category'] ?? null,
+            channelOptions: $attributes['channel_options'] ?? [],
+            supportedContexts: $attributes['supported_contexts'] ?? [],
+            configurable: (bool) ($attributes['configurable'] ?? true),
         );
     }
 
@@ -31,6 +37,12 @@ final readonly class NotificationDefinition
         public bool $optIn = false,
         public array $contextDefaults = [],
         public ?string $notificationClass = null,
+        public ?string $name = null,
+        public ?string $description = null,
+        public ?string $category = null,
+        public array $channelOptions = [],
+        public array $supportedContexts = [],
+        public bool $configurable = true,
     ) {
         if ($this->key === '') {
             throw new InvalidArgumentException('A notification definition key cannot be empty.');
@@ -44,6 +56,33 @@ final readonly class NotificationDefinition
 
     public function isMandatoryFor(string $channel): bool
     {
-        return $this->mandatory || in_array($channel, $this->mandatoryChannels, true);
+        return $this->mandatory
+            || in_array($channel, $this->mandatoryChannels, true)
+            || (bool) ($this->channelOptions[$channel]['mandatory'] ?? false);
+    }
+
+    public function isOptInFor(string $channel): bool
+    {
+        return $this->optIn || (bool) ($this->channelOptions[$channel]['opt_in'] ?? false);
+    }
+
+    public function isModifiableFor(string $channel): bool
+    {
+        return $this->configurable
+            && (bool) ($this->channelOptions[$channel]['configurable'] ?? true)
+            && ! $this->isMandatoryFor($channel);
+
+    }
+
+    public function channelDefault(string $channel): ?bool
+    {
+        $value = $this->channelOptions[$channel]['default'] ?? null;
+
+        return is_bool($value) ? $value : null;
+    }
+
+    public function isHidden(string $channel): bool
+    {
+        return (bool) ($this->channelOptions[$channel]['hidden'] ?? false);
     }
 }
