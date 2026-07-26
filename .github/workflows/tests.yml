@@ -29,7 +29,13 @@ jobs:
           coverage: none
 
       - run: composer require --dev "orchestra/testbench:${{ matrix.testbench }}" --no-update
-      - run: composer update --prefer-dist --no-interaction --with-all-dependencies
+      - name: Install Laravel 11 compatibility dependencies
+        if: matrix.laravel == 11
+        run: composer update --prefer-dist --no-interaction --with-all-dependencies --no-blocking
+
+      - name: Install Laravel 12 dependencies
+        if: matrix.laravel == 12
+        run: composer update --prefer-dist --no-interaction --with-all-dependencies
       - run: composer test
       - run: composer validate --no-check-publish --no-interaction
       - run: composer lint
