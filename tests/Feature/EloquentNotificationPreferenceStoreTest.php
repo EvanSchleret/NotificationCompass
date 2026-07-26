@@ -6,6 +6,10 @@ namespace NotificationCompass\Tests\Feature;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Notifications\Events\NotificationSending;
+use Illuminate\Notifications\Notification;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\Schema;
 use NotificationCompass\Concerns\HasNotificationPreferences;
 use NotificationCompass\Definitions\NotificationDefinitionRegistry;
@@ -35,7 +39,8 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
         ]);
         $app['config']->set('notificationcompass.definitions', [
             'event.booking_created' => [
-                'channels' => ['mail'],
+                'channels' => ['mail', 'database'],
+                'defaults' => ['database' => true],
                 'notification_class' => TestConfiguredNotification::class,
             ],
             'security.alert' => [
@@ -98,7 +103,7 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
         $definition = $this->app->make(NotificationDefinitionRegistry::class)
             ->get('event.booking_created');
 
-        self::assertSame(['mail'], $definition->channels);
+        self::assertSame(['mail', 'database'], $definition->channels);
         self::assertSame(TestConfiguredNotification::class, $definition->notificationClass);
         self::assertTrue($this->app->make(NotificationDefinitionRegistry::class)->has('digest.weekly'));
     }
@@ -172,14 +177,57 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
 
         self::assertFalse($user->canReceiveNotification($notification, 'mail', $context));
     }
+
+    public function test_laravel_event_listener_applies_the_same_decision_to_each_channel(): void
+    {
+        $user = TestUser::query()->create();
+        $user->disableNotification('event.booking_created', 'mail');
+        $notification = new TestConfiguredNotification();
+
+        $mailResult = $this->app['events']->dispatch(
+            new NotificationSending($user, $notification, 'mail'),
+            [],
+            true,
+        );
+        $databaseResult = $this->app['events']->dispatch(
+            new NotificationSending($user, $notification, 'database'),
+            [],
+            true,
+        );
+
+        self::assertFalse($mailResult);
+        self::assertTrue($databaseResult);
+    }
+
+    public function test_queueable_notification_context_survives_serialization(): void
+    {
+        $notification = new TestQueueableNotification();
+        $restored = unserialize(serialize($notification));
+
+        self::assertInstanceOf(TestQueueableNotification::class, $restored);
+        self::assertSame(
+            'organization:7',
+            $restored->notificationContext(new TestUser())->key(),
+        );
+    }
 }
 
-final class TestConfiguredNotification
+final class TestConfiguredNotification extends Notification
 {
 }
 
-final class TestContextualNotification
+final class TestContextualNotification extends Notification
 {
+    public function notificationContext(object $notifiable): NotificationContext
+    {
+        return new NotificationContext('organization', 7);
+    }
+}
+
+final class TestQueueableNotification extends Notification implements ShouldQueue
+{
+    use Queueable;
+
     public function notificationContext(object $notifiable): NotificationContext
     {
         return new NotificationContext('organization', 7);
