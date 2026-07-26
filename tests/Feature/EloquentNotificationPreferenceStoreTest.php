@@ -6,10 +6,16 @@ namespace NotificationCompass\Tests\Feature;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Notifications\DatabaseNotification;
+use Illuminate\Notifications\Events\BroadcastNotificationCreated;
 use Illuminate\Notifications\Events\NotificationSending;
 use Illuminate\Notifications\Notification;
+use Illuminate\Notifications\Notifiable;
+use Illuminate\Notifications\NotificationServiceProvider;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Contracts\Notifications\Factory as NotificationFactory;
+use Illuminate\Support\Facades\Notification as NotificationFacade;
 use Illuminate\Support\Facades\Schema;
 use NotificationCompass\Concerns\HasNotificationPreferences;
 use NotificationCompass\Definitions\NotificationDefinitionRegistry;
@@ -27,6 +33,14 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
     protected function getPackageProviders($app): array
     {
         return [NotificationCompassServiceProvider::class];
+    }
+
+    protected function getApplicationProviders($app): array
+    {
+        return [
+            ...parent::getApplicationProviders($app),
+            NotificationServiceProvider::class,
+        ];
     }
 
     protected function defineEnvironment($app): void
@@ -55,8 +69,25 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
                 'notification_class' => TestContextualNotification::class,
                 'supported_contexts' => ['organization'],
             ],
+            'test.sendable' => [
+                'channels' => ['test'],
+                'notification_class' => TestSendableNotification::class,
+            ],
+            'test.multi' => [
+                'channels' => ['test', 'test_secondary'],
+                'notification_class' => TestMultiChannelNotification::class,
+            ],
+            'test.database' => [
+                'channels' => ['database'],
+                'notification_class' => TestDatabaseNotification::class,
+            ],
+            'test.broadcast' => [
+                'channels' => ['broadcast'],
+                'notification_class' => TestBroadcastNotification::class,
+            ],
         ]);
         $app['config']->set('notificationcompass.definition_providers', [TestDefinitionProvider::class]);
+        $app['config']->set('queue.default', 'sync');
     }
 
     protected function defineDatabaseMigrations(): void
@@ -67,6 +98,25 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
             $table->id();
             $table->timestamps();
         });
+        Schema::create('notifications', function (Blueprint $table): void {
+            $table->uuid('id')->primary();
+            $table->string('type');
+            $table->string('notifiable_type');
+            $table->unsignedBigInteger('notifiable_id');
+            $table->text('data');
+            $table->timestamp('read_at')->nullable();
+            $table->timestamps();
+            $table->index(['notifiable_type', 'notifiable_id']);
+        });
+    }
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        (new NotificationServiceProvider($this->app))->register();
+        $this->app->make(NotificationFactory::class)->extend('test', static fn (): TestChannel => new TestChannel());
+        $this->app->make(NotificationFactory::class)->extend('test_secondary', static fn (): TestChannel => new TestChannel());
+        TestChannel::$sent = 0;
     }
 
     public function test_context_preferences_are_isolated_and_resettable(): void
@@ -210,6 +260,72 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
             $restored->notificationContext(new TestUser())->key(),
         );
     }
+
+    public function test_real_laravel_send_now_honors_preferences_before_custom_channel_delivery(): void
+    {
+        $user = TestUser::query()->create();
+        $user->enableNotification('test.sendable', 'test');
+
+        NotificationFacade::sendNow($user, new TestSendableNotification());
+
+        self::assertSame(1, TestChannel::$sent);
+
+        $user->disableNotification('test.sendable', 'test');
+        NotificationFacade::sendNow($user, new TestSendableNotification());
+
+        self::assertSame(1, TestChannel::$sent);
+    }
+
+    public function test_real_queueable_send_uses_the_same_gate(): void
+    {
+        $user = TestUser::query()->create();
+        $user->enableNotification('test.sendable', 'test');
+
+        NotificationFacade::send($user, new TestQueueableSendableNotification());
+
+        self::assertSame(1, TestChannel::$sent);
+    }
+
+    public function test_real_multi_recipient_multi_channel_send_is_gated_per_recipient(): void
+    {
+        $enabled = TestUser::query()->create();
+        $disabled = TestUser::query()->create();
+        $enabled->enableNotification('test.multi', 'test');
+        $enabled->enableNotification('test.multi', 'test_secondary');
+        $disabled->disableNotification('test.multi', 'test');
+        $disabled->disableNotification('test.multi', 'test_secondary');
+
+        NotificationFacade::sendNow([$enabled, $disabled], new TestMultiChannelNotification());
+
+        self::assertSame(2, TestChannel::$sent);
+    }
+
+    public function test_real_database_channel_delivery_is_gated(): void
+    {
+        $user = TestUser::query()->create();
+        $user->enableNotification('test.database', 'database');
+
+        NotificationFacade::sendNow($user, new TestDatabaseNotification());
+
+        self::assertSame(1, DatabaseNotification::query()->count());
+    }
+
+    public function test_real_broadcast_channel_delivery_is_gated(): void
+    {
+        $user = TestUser::query()->create();
+        $user->enableNotification('test.broadcast', 'broadcast');
+        $received = 0;
+        $this->app['events']->listen(
+            BroadcastNotificationCreated::class,
+            static function () use (&$received): void {
+                $received++;
+            },
+        );
+
+        NotificationFacade::sendNow($user, new TestBroadcastNotification());
+
+        self::assertSame(1, $received);
+    }
 }
 
 final class TestConfiguredNotification extends Notification
@@ -234,6 +350,63 @@ final class TestQueueableNotification extends Notification implements ShouldQueu
     }
 }
 
+class TestSendableNotification extends Notification
+{
+    public function via(object $notifiable): array
+    {
+        return ['test'];
+    }
+}
+
+final class TestQueueableSendableNotification extends TestSendableNotification implements ShouldQueue
+{
+    use Queueable;
+}
+
+final class TestMultiChannelNotification extends Notification
+{
+    public function via(object $notifiable): array
+    {
+        return ['test', 'test_secondary'];
+    }
+}
+
+final class TestDatabaseNotification extends Notification
+{
+    public function via(object $notifiable): array
+    {
+        return ['database'];
+    }
+
+    public function toArray(object $notifiable): array
+    {
+        return ['message' => 'stored'];
+    }
+}
+
+final class TestBroadcastNotification extends Notification
+{
+    public function via(object $notifiable): array
+    {
+        return ['broadcast'];
+    }
+
+    public function toBroadcast(object $notifiable): array
+    {
+        return ['message' => 'broadcast'];
+    }
+}
+
+final class TestChannel
+{
+    public static int $sent = 0;
+
+    public function send(object $notifiable, Notification $notification): void
+    {
+        self::$sent++;
+    }
+}
+
 final class TestDefinitionProvider implements NotificationDefinitionProvider
 {
     public function register(NotificationDefinitionRegistry $registry): void
@@ -244,7 +417,7 @@ final class TestDefinitionProvider implements NotificationDefinitionProvider
 
 final class TestUser extends Model
 {
-    use HasNotificationPreferences;
+    use HasNotificationPreferences, Notifiable;
 
     protected $table = 'users';
 
