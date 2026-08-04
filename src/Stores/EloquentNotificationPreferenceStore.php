@@ -10,6 +10,10 @@ use InvalidArgumentException;
 use NotificationCompass\Contracts\MutableNotificationPreferenceStore;
 use NotificationCompass\Contracts\InspectableNotificationPreferenceStore;
 use NotificationCompass\Contracts\NotificationPreferenceCache;
+use NotificationCompass\Definitions\NotificationDefinition;
+use NotificationCompass\Definitions\NotificationDefinitionRegistry;
+use NotificationCompass\Events\NotificationPreferenceChanged;
+use NotificationCompass\Events\NotificationPreferenceChangeType;
 use NotificationCompass\Models\NotificationPreference;
 use NotificationCompass\ValueObjects\NotificationContext;
 
@@ -45,6 +49,19 @@ final class EloquentNotificationPreferenceStore implements MutableNotificationPr
         bool $enabled,
         ?NotificationContext $context,
     ): void {
+        $query = NotificationPreference::query()
+            ->where($this->identity($notifiable))
+            ->where('notification_key', $notificationKey)
+            ->where('channel', $channel)
+            ->where('context_key', $this->contextKey($context));
+        $previous = $query->first();
+
+        if ($previous?->enabled === $enabled) {
+            return;
+        }
+
+        $definition = $this->definition($notificationKey);
+
         NotificationPreference::query()->updateOrCreate(
             [
                 ...$this->identity($notifiable),
@@ -55,6 +72,17 @@ final class EloquentNotificationPreferenceStore implements MutableNotificationPr
             ['enabled' => $enabled],
         );
         $this->cache?->invalidateNotifiable($notifiable);
+        event(new NotificationPreferenceChanged(
+            notifiable: $notifiable,
+            context: $context,
+            definition: $definition,
+            channel: $channel,
+            oldValue: $previous?->enabled,
+            newValue: $enabled,
+            change: $previous === null
+                ? NotificationPreferenceChangeType::CREATED
+                : NotificationPreferenceChangeType::MODIFIED,
+        ));
     }
 
     public function forget(
@@ -63,13 +91,29 @@ final class EloquentNotificationPreferenceStore implements MutableNotificationPr
         string $channel,
         ?NotificationContext $context,
     ): void {
-        NotificationPreference::query()
+        $query = NotificationPreference::query()
             ->where($this->identity($notifiable))
             ->where('notification_key', $notificationKey)
             ->where('channel', $channel)
-            ->where('context_key', $this->contextKey($context))
-            ->delete();
+            ->where('context_key', $this->contextKey($context));
+        $previous = $query->first();
+
+        if ($previous === null) {
+            return;
+        }
+
+        $definition = $this->definition($notificationKey);
+        $query->delete();
         $this->cache?->invalidateNotifiable($notifiable);
+        event(new NotificationPreferenceChanged(
+            notifiable: $notifiable,
+            context: $context,
+            definition: $definition,
+            channel: $channel,
+            oldValue: $previous->enabled,
+            newValue: null,
+            change: NotificationPreferenceChangeType::RESET,
+        ));
     }
 
     public function all(object $notifiable): array
@@ -112,5 +156,12 @@ final class EloquentNotificationPreferenceStore implements MutableNotificationPr
         return $container->bound(NotificationPreferenceCache::class)
             ? $container->make(NotificationPreferenceCache::class)
             : null;
+    }
+
+    private function definition(string $notificationKey): NotificationDefinition
+    {
+        return Container::getInstance()
+            ->make(NotificationDefinitionRegistry::class)
+            ->get($notificationKey);
     }
 }

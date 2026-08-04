@@ -16,6 +16,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Contracts\Notifications\Factory as NotificationFactory;
 use Illuminate\Support\Facades\Notification as NotificationFacade;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Schema;
 use NotificationCompass\Concerns\HasNotificationPreferences;
 use NotificationCompass\Contracts\NotificationContextAuthorizer;
@@ -23,6 +24,8 @@ use NotificationCompass\Contracts\MutableNotificationContextPreferenceStore;
 use NotificationCompass\Definitions\NotificationDefinitionRegistry;
 use NotificationCompass\Contracts\NotificationDefinitionProvider;
 use NotificationCompass\Definitions\NotificationDefinition;
+use NotificationCompass\Events\NotificationPreferenceChanged;
+use NotificationCompass\Events\NotificationPreferenceChangeType;
 use NotificationCompass\NotificationCompassServiceProvider;
 use NotificationCompass\Stores\EloquentNotificationContextPreferenceStore;
 use NotificationCompass\Stores\EloquentNotificationPreferenceStore;
@@ -234,6 +237,98 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
             'mail',
             $context,
         ));
+    }
+
+    public function test_user_preference_changes_dispatch_events_with_previous_and_new_values(): void
+    {
+        Event::fake();
+        $user = TestUser::query()->create();
+        $store = new EloquentNotificationPreferenceStore();
+
+        $store->set($user, 'event.booking_created', 'mail', true, null);
+        $store->set($user, 'event.booking_created', 'mail', false, null);
+        $store->forget($user, 'event.booking_created', 'mail', null);
+
+        Event::assertDispatchedTimes(NotificationPreferenceChanged::class, 3);
+        Event::assertDispatched(NotificationPreferenceChanged::class, static function (
+            NotificationPreferenceChanged $event,
+        ): bool {
+            return $event->change === NotificationPreferenceChangeType::CREATED
+                && $event->notifiable instanceof TestUser
+                && $event->context === null
+                && $event->definition->key === 'event.booking_created'
+                && $event->channel === 'mail'
+                && $event->oldValue === null
+                && $event->newValue === true;
+        });
+        Event::assertDispatched(NotificationPreferenceChanged::class, static function (
+            NotificationPreferenceChanged $event,
+        ): bool {
+            return $event->change === NotificationPreferenceChangeType::MODIFIED
+                && $event->oldValue === true
+                && $event->newValue === false;
+        });
+        Event::assertDispatched(NotificationPreferenceChanged::class, static function (
+            NotificationPreferenceChanged $event,
+        ): bool {
+            return $event->change === NotificationPreferenceChangeType::RESET
+                && $event->oldValue === false
+                && $event->newValue === null;
+        });
+    }
+
+    public function test_context_policy_changes_dispatch_events_with_modes(): void
+    {
+        Event::fake();
+        $context = new NotificationContext('organization', 10);
+        $store = new EloquentNotificationContextPreferenceStore();
+
+        $store->set(
+            $context,
+            'event.contextual',
+            'mail',
+            false,
+            NotificationContextPreferenceMode::DEFAULT,
+        );
+        $store->set(
+            $context,
+            'event.contextual',
+            'mail',
+            true,
+            NotificationContextPreferenceMode::ENFORCED,
+        );
+        $store->forget($context, 'event.contextual', 'mail');
+
+        Event::assertDispatchedTimes(NotificationPreferenceChanged::class, 3);
+        Event::assertDispatched(NotificationPreferenceChanged::class, static function (
+            NotificationPreferenceChanged $event,
+        ): bool {
+            return $event->change === NotificationPreferenceChangeType::CREATED
+                && $event->notifiable === null
+                && $event->context?->key() === 'organization:10'
+                && $event->oldValue === null
+                && $event->newValue === false
+                && $event->oldMode === null
+                && $event->newMode === NotificationContextPreferenceMode::DEFAULT;
+        });
+        Event::assertDispatched(NotificationPreferenceChanged::class, static function (
+            NotificationPreferenceChanged $event,
+        ): bool {
+            return $event->change === NotificationPreferenceChangeType::MODIFIED
+                && $event->oldValue === false
+                && $event->newValue === true
+                && $event->oldMode === NotificationContextPreferenceMode::DEFAULT
+                && $event->newMode === NotificationContextPreferenceMode::ENFORCED;
+        });
+        Event::assertDispatched(NotificationPreferenceChanged::class, static function (
+            NotificationPreferenceChanged $event,
+        ): bool {
+            return $event->change === NotificationPreferenceChangeType::DELETED
+                && $event->oldValue === true
+                && $event->newValue === null
+                && $event->oldMode === NotificationContextPreferenceMode::ENFORCED
+                && $event->newMode === null;
+        });
     }
 
     public function test_definitions_are_loaded_from_configuration(): void
