@@ -11,6 +11,7 @@ use NotificationCompass\Contracts\NotificationPreferenceStore;
 use NotificationCompass\Definitions\NotificationDefinition;
 use NotificationCompass\Definitions\NotificationDefinitionRegistry;
 use NotificationCompass\Listeners\NotificationSendingListener;
+use NotificationCompass\Resolution\NotificationDecisionReason;
 use NotificationCompass\Resolution\PreferenceResolver;
 use NotificationCompass\Resolution\NotificationGate;
 use NotificationCompass\ValueObjects\NotificationContext;
@@ -104,6 +105,7 @@ final class NotificationSendingListenerTest extends TestCase
 
         self::assertNotNull($result);
         self::assertFalse($result->enabled);
+        self::assertSame(NotificationDecisionReason::CONTEXT_UNAUTHORIZED, $result->reason);
         self::assertSame('context_unauthorized', $result->source);
     }
 }

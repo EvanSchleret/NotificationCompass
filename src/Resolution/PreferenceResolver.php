@@ -59,7 +59,7 @@ final readonly class PreferenceResolver
         $definition = $this->definitions->get($notificationKey);
 
         if ($definition->isMandatoryFor($channel)) {
-            return new ResolvedPreference(true, 'mandatory', true);
+            return new ResolvedPreference(true, NotificationDecisionReason::MANDATORY, true);
         }
 
         $contextPreference = $this->contextPreference($context, $notificationKey, $channel);
@@ -69,12 +69,12 @@ final readonly class PreferenceResolver
 
         $userContextPreference = $preferences->get($notifiable, $notificationKey, $channel, $context);
         if ($userContextPreference !== null && $context !== null) {
-            return new ResolvedPreference($userContextPreference, 'user_context');
+            return new ResolvedPreference($userContextPreference, NotificationDecisionReason::USER_CONTEXT);
         }
 
         $globalPreference = $preferences->get($notifiable, $notificationKey, $channel, null);
         if ($globalPreference !== null) {
-            return new ResolvedPreference($globalPreference, 'user_global');
+            return new ResolvedPreference($globalPreference, NotificationDecisionReason::USER_GLOBAL);
         }
 
         if ($contextPreference !== null) {
@@ -83,27 +83,30 @@ final readonly class PreferenceResolver
 
         $contextDefault = $this->contextDefault($definition, $context, $channel);
         if ($contextDefault !== null) {
-            return new ResolvedPreference($contextDefault, 'type_context_default');
+            return new ResolvedPreference($contextDefault, NotificationDecisionReason::TYPE_CONTEXT_DEFAULT);
         }
 
         if (array_key_exists($channel, $definition->defaults)) {
-            return new ResolvedPreference($definition->defaults[$channel], 'type_default');
+            return new ResolvedPreference($definition->defaults[$channel], NotificationDecisionReason::TYPE_DEFAULT);
         }
 
         $channelDefault = $definition->channelDefault($channel);
         if ($channelDefault !== null) {
-            return new ResolvedPreference($channelDefault, 'channel_definition_default');
+            return new ResolvedPreference(
+                $channelDefault,
+                NotificationDecisionReason::CHANNEL_DEFINITION_DEFAULT,
+            );
         }
 
         if ($definition->isOptInFor($channel)) {
-            return new ResolvedPreference(false, 'opt_in_default');
+            return new ResolvedPreference(false, NotificationDecisionReason::OPT_IN_DEFAULT);
         }
 
         if (array_key_exists($channel, $this->channelDefaults)) {
-            return new ResolvedPreference($this->channelDefaults[$channel], 'channel_default');
+            return new ResolvedPreference($this->channelDefaults[$channel], NotificationDecisionReason::CHANNEL_DEFAULT);
         }
 
-        return new ResolvedPreference($this->packageDefault, 'package_default');
+        return new ResolvedPreference($this->packageDefault, NotificationDecisionReason::PACKAGE_DEFAULT);
     }
 
     private function contextPreference(
@@ -122,7 +125,7 @@ final readonly class PreferenceResolver
     {
         return new ResolvedPreference(
             $preference->enabled,
-            'context_policy',
+            NotificationDecisionReason::CONTEXT_POLICY,
             false,
             $preference->mode,
         );

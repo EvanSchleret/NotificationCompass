@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace NotificationCompass\ValueObjects;
 
 use NotificationCompass\Definitions\NotificationDefinition;
+use NotificationCompass\Resolution\NotificationDecisionReason;
 use NotificationCompass\Resolution\ResolvedPreference;
 
 final readonly class NotificationPreferenceInspection
@@ -13,6 +14,7 @@ final readonly class NotificationPreferenceInspection
         public NotificationDefinition $definition,
         public string $channel,
         public bool $enabled,
+        public NotificationDecisionReason $reason,
         public string $source,
         public bool $modifiable,
         public bool $mandatory,
@@ -29,6 +31,7 @@ final readonly class NotificationPreferenceInspection
             definition: $definition,
             channel: $channel,
             enabled: $preference->enabled,
+            reason: $preference->reason,
             source: $preference->source,
             modifiable: $preference->isModifiable(),
             mandatory: $preference->mandatory,

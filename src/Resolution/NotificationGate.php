@@ -33,17 +33,17 @@ final readonly class NotificationGate
         }
 
         if (! $definition->hasChannel($channel)) {
-            return new ResolvedPreference(false, 'channel_unavailable');
+            return new ResolvedPreference(false, NotificationDecisionReason::CHANNEL_UNDECLARED);
         }
 
         $resolvedContext = $context ?? $this->contexts->resolve($notification, $notifiable);
         if (! $definition->supportsContext($resolvedContext)) {
-            return new ResolvedPreference(false, 'context_unavailable');
+            return new ResolvedPreference(false, NotificationDecisionReason::CONTEXT_UNSUPPORTED);
         }
 
         if ($resolvedContext !== null && $this->authorizer !== null
             && ! $this->authorizer->authorize($notifiable, $resolvedContext)) {
-            return new ResolvedPreference(false, 'context_unauthorized');
+            return new ResolvedPreference(false, NotificationDecisionReason::CONTEXT_UNAUTHORIZED);
         }
 
         return $this->resolver->resolve(

@@ -27,6 +27,7 @@ use NotificationCompass\Definitions\NotificationDefinition;
 use NotificationCompass\Events\NotificationPreferenceChanged;
 use NotificationCompass\Events\NotificationPreferenceChangeType;
 use NotificationCompass\NotificationCompassServiceProvider;
+use NotificationCompass\Resolution\NotificationDecisionReason;
 use NotificationCompass\Stores\EloquentNotificationContextPreferenceStore;
 use NotificationCompass\Stores\EloquentNotificationPreferenceStore;
 use NotificationCompass\ValueObjects\NotificationContext;
@@ -446,6 +447,7 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
         self::assertSame(['mail'], $userContext->definition->channels);
         self::assertSame('mail', $userContext->channel);
         self::assertTrue($userContext->enabled);
+        self::assertSame(NotificationDecisionReason::USER_CONTEXT, $userContext->reason);
         self::assertSame('user_context', $userContext->source);
         self::assertTrue($userContext->modifiable);
         self::assertFalse($userContext->mandatory);
@@ -463,6 +465,7 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
         $policy = $user->notificationPreferences()->inspectPreferences($context)['event.contextual']['mail'];
 
         self::assertFalse($policy->enabled);
+        self::assertSame(NotificationDecisionReason::CONTEXT_POLICY, $policy->reason);
         self::assertSame('context_policy', $policy->source);
         self::assertFalse($policy->isModifiable());
         self::assertFalse($policy->modifiable);

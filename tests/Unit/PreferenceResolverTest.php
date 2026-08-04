@@ -9,6 +9,7 @@ use NotificationCompass\Contracts\NotificationContextPreferenceStore;
 use NotificationCompass\Contracts\NotificationPreferenceCache;
 use NotificationCompass\Definitions\NotificationDefinition;
 use NotificationCompass\Definitions\NotificationDefinitionRegistry;
+use NotificationCompass\Resolution\NotificationDecisionReason;
 use NotificationCompass\Resolution\PreferenceResolver;
 use NotificationCompass\Resolution\ResolvedPreference;
 use NotificationCompass\ValueObjects\NotificationContext;
@@ -32,6 +33,7 @@ final class PreferenceResolverTest extends TestCase
         );
 
         self::assertTrue($result->enabled);
+        self::assertSame(NotificationDecisionReason::MANDATORY, $result->reason);
         self::assertSame('mandatory', $result->source);
         self::assertFalse($result->isModifiable());
     }
@@ -55,6 +57,7 @@ final class PreferenceResolverTest extends TestCase
         );
 
         self::assertTrue($result->enabled);
+        self::assertSame(NotificationDecisionReason::USER_CONTEXT, $result->reason);
         self::assertSame('user_context', $result->source);
     }
 
@@ -81,6 +84,7 @@ final class PreferenceResolverTest extends TestCase
         );
 
         self::assertFalse($result->enabled);
+        self::assertSame(NotificationDecisionReason::CONTEXT_POLICY, $result->reason);
         self::assertSame('context_policy', $result->source);
         self::assertFalse($result->isModifiable());
     }
@@ -151,6 +155,7 @@ final class PreferenceResolverTest extends TestCase
         );
 
         self::assertFalse($result->enabled);
+        self::assertSame(NotificationDecisionReason::OPT_IN_DEFAULT, $result->reason);
         self::assertSame('opt_in_default', $result->source);
     }
 
@@ -158,7 +163,7 @@ final class PreferenceResolverTest extends TestCase
     {
         $registry = new NotificationDefinitionRegistry();
         $registry->register(new NotificationDefinition('event.booking_created', ['mail']));
-        $cached = new ResolvedPreference(false, 'cached');
+        $cached = new ResolvedPreference(false, NotificationDecisionReason::USER_GLOBAL);
         $cache = new InMemoryPreferenceCache($cached);
 
         $result = (new PreferenceResolver(
