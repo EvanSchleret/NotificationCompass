@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace NotificationCompass\Tests\Unit;
 
 use Illuminate\Notifications\Events\NotificationSending;
+use NotificationCompass\Contracts\NotificationContextAuthorizer;
 use NotificationCompass\Contracts\NotificationContextResolver;
 use NotificationCompass\Contracts\NotificationPreferenceStore;
 use NotificationCompass\Definitions\NotificationDefinition;
@@ -31,6 +32,7 @@ final class NotificationSendingListenerTest extends TestCase
             new TestContextResolver(),
             new TestPreferenceStore(false),
             new PreferenceResolver($registry, [], false),
+            new TestContextAuthorizer(),
         ));
 
         $allowed = $listener->handle(new NotificationSending(new TestNotifiable(), new TestNotification(), 'mail'));
@@ -46,6 +48,7 @@ final class NotificationSendingListenerTest extends TestCase
             new TestContextResolver(),
             new TestPreferenceStore(false),
             new PreferenceResolver($registry, [], false),
+            new TestContextAuthorizer(),
         ));
 
         $allowed = $listener->handle(new NotificationSending(new TestNotifiable(), new TestNotification(), 'mail'));
@@ -67,11 +70,41 @@ final class NotificationSendingListenerTest extends TestCase
             new TestContextResolver(),
             new TestPreferenceStore(true),
             new PreferenceResolver($registry, [], false),
+            new TestContextAuthorizer(),
         ));
 
         $allowed = $listener->handle(new NotificationSending(new TestNotifiable(), new TestNotification(), 'mail'));
 
         self::assertFalse($allowed);
+    }
+
+    public function test_unauthorized_contexts_are_not_delivered(): void
+    {
+        $registry = new NotificationDefinitionRegistry();
+        $registry->register(new NotificationDefinition(
+            'message.received',
+            ['mail'],
+            notificationClass: TestNotification::class,
+        ));
+
+        $gate = new NotificationGate(
+            $registry,
+            new TestContextResolver(),
+            new TestPreferenceStore(true),
+            new PreferenceResolver($registry, [], false),
+            new DenyingContextAuthorizer(),
+        );
+
+        $result = $gate->decision(
+            new TestNotifiable(),
+            new TestNotification(),
+            'mail',
+            new NotificationContext('organization', 42),
+        );
+
+        self::assertNotNull($result);
+        self::assertFalse($result->enabled);
+        self::assertSame('context_unauthorized', $result->source);
     }
 }
 
@@ -88,6 +121,22 @@ final class TestContextResolver implements NotificationContextResolver
     public function resolve(object $notification, object $notifiable): ?NotificationContext
     {
         return null;
+    }
+}
+
+final class TestContextAuthorizer implements NotificationContextAuthorizer
+{
+    public function authorize(object $notifiable, NotificationContext $context): bool
+    {
+        return true;
+    }
+}
+
+final class DenyingContextAuthorizer implements NotificationContextAuthorizer
+{
+    public function authorize(object $notifiable, NotificationContext $context): bool
+    {
+        return false;
     }
 }
 

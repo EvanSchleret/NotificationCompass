@@ -6,6 +6,7 @@ namespace NotificationCompass\Managers;
 
 use NotificationCompass\Contracts\MutableNotificationPreferenceStore;
 use NotificationCompass\Contracts\InspectableNotificationPreferenceStore;
+use NotificationCompass\Contracts\NotificationContextAuthorizer;
 use NotificationCompass\Definitions\NotificationDefinition;
 use NotificationCompass\Definitions\NotificationDefinitionRegistry;
 use NotificationCompass\Resolution\PreferenceResolver;
@@ -21,6 +22,7 @@ final readonly class NotificationPreferenceManager
         private MutableNotificationPreferenceStore $store,
         private PreferenceResolver $resolver,
         private NotificationDefinitionRegistry $definitions,
+        private ?NotificationContextAuthorizer $authorizer = null,
     ) {
     }
 
@@ -29,6 +31,7 @@ final readonly class NotificationPreferenceManager
         string $channel,
         ?NotificationContext $context = null,
     ): void {
+        $this->assertContextAuthorized($context);
         $this->assertModifiable($notificationKey, $channel);
         $this->store->set($this->notifiable, $notificationKey, $channel, true, $context);
     }
@@ -37,6 +40,8 @@ final readonly class NotificationPreferenceManager
         string $notificationKey,
         ?NotificationContext $context = null,
     ): NotificationPreferenceSelection {
+        $this->assertContextAuthorized($context);
+
         return new NotificationPreferenceSelection($this, $notificationKey, $context);
     }
 
@@ -61,6 +66,8 @@ final readonly class NotificationPreferenceManager
 
     public function effectivePreferences(?NotificationContext $context = null): array
     {
+        $this->assertContextAuthorized($context);
+
         $preferences = [];
 
         foreach ($this->definitions->all() as $definition) {
@@ -85,6 +92,7 @@ final readonly class NotificationPreferenceManager
         string $channel,
         ?NotificationContext $context = null,
     ): void {
+        $this->assertContextAuthorized($context);
         $this->assertModifiable($notificationKey, $channel);
         $this->store->set($this->notifiable, $notificationKey, $channel, false, $context);
     }
@@ -94,6 +102,7 @@ final readonly class NotificationPreferenceManager
         string $channel,
         ?NotificationContext $context = null,
     ): void {
+        $this->assertContextAuthorized($context);
         $this->assertModifiable($notificationKey, $channel);
         $this->store->forget($this->notifiable, $notificationKey, $channel, $context);
     }
@@ -103,6 +112,8 @@ final readonly class NotificationPreferenceManager
         string $channel,
         ?NotificationContext $context = null,
     ): ?bool {
+        $this->assertContextAuthorized($context);
+
         return $this->store->get($this->notifiable, $notificationKey, $channel, $context);
     }
 
@@ -111,6 +122,8 @@ final readonly class NotificationPreferenceManager
         string $channel,
         ?NotificationContext $context = null,
     ): ResolvedPreference {
+        $this->assertContextAuthorized($context);
+
         return $this->resolver->resolve(
             $this->notifiable,
             $notificationKey,
@@ -133,6 +146,16 @@ final readonly class NotificationPreferenceManager
         if (! $definition->isModifiableFor($channel)) {
             throw new LogicException(
                 "Channel [{$channel}] cannot be modified for notification type [{$notificationKey}].",
+            );
+        }
+    }
+
+    private function assertContextAuthorized(?NotificationContext $context): void
+    {
+        if ($context !== null && $this->authorizer !== null
+            && ! $this->authorizer->authorize($this->notifiable, $context)) {
+            throw new LogicException(
+                "The notifiable is not authorized to access notification context [{$context->key()}].",
             );
         }
     }

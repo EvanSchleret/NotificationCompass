@@ -18,6 +18,7 @@ use Illuminate\Contracts\Notifications\Factory as NotificationFactory;
 use Illuminate\Support\Facades\Notification as NotificationFacade;
 use Illuminate\Support\Facades\Schema;
 use NotificationCompass\Concerns\HasNotificationPreferences;
+use NotificationCompass\Contracts\NotificationContextAuthorizer;
 use NotificationCompass\Definitions\NotificationDefinitionRegistry;
 use NotificationCompass\Contracts\NotificationDefinitionProvider;
 use NotificationCompass\Definitions\NotificationDefinition;
@@ -228,6 +229,19 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
         self::assertFalse($user->canReceiveNotification($notification, 'mail', $context));
     }
 
+    public function test_context_authorizer_protects_preference_access(): void
+    {
+        $this->app->instance(NotificationContextAuthorizer::class, new DenyingFeatureContextAuthorizer());
+        $user = TestUser::query()->create();
+
+        $this->expectException(LogicException::class);
+        $user->notificationPreferences()->effective(
+            'event.booking_created',
+            'mail',
+            new NotificationContext('organization', 7),
+        );
+    }
+
     public function test_laravel_event_listener_applies_the_same_decision_to_each_channel(): void
     {
         $user = TestUser::query()->create();
@@ -412,6 +426,14 @@ final class TestDefinitionProvider implements NotificationDefinitionProvider
     public function register(NotificationDefinitionRegistry $registry): void
     {
         $registry->register(new NotificationDefinition('digest.weekly', ['mail'], optIn: true));
+    }
+}
+
+final class DenyingFeatureContextAuthorizer implements NotificationContextAuthorizer
+{
+    public function authorize(object $notifiable, NotificationContext $context): bool
+    {
+        return false;
     }
 }
 

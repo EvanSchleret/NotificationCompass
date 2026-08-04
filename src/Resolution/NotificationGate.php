@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace NotificationCompass\Resolution;
 
 use NotificationCompass\Contracts\NotificationContextResolver;
+use NotificationCompass\Contracts\NotificationContextAuthorizer;
 use NotificationCompass\Contracts\NotificationPreferenceStore;
 use NotificationCompass\Definitions\NotificationDefinitionRegistry;
 use NotificationCompass\ValueObjects\NotificationContext;
@@ -16,6 +17,7 @@ final readonly class NotificationGate
         private NotificationContextResolver $contexts,
         private NotificationPreferenceStore $preferences,
         private PreferenceResolver $resolver,
+        private ?NotificationContextAuthorizer $authorizer = null,
     ) {
     }
 
@@ -37,6 +39,11 @@ final readonly class NotificationGate
         $resolvedContext = $context ?? $this->contexts->resolve($notification, $notifiable);
         if (! $definition->supportsContext($resolvedContext)) {
             return new ResolvedPreference(false, 'context_unavailable');
+        }
+
+        if ($resolvedContext !== null && $this->authorizer !== null
+            && ! $this->authorizer->authorize($notifiable, $resolvedContext)) {
+            return new ResolvedPreference(false, 'context_unauthorized');
         }
 
         return $this->resolver->resolve(

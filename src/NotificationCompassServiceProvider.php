@@ -7,6 +7,7 @@ namespace NotificationCompass;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Notifications\Events\NotificationSending;
 use Illuminate\Support\ServiceProvider;
+use NotificationCompass\Contracts\NotificationContextAuthorizer;
 use NotificationCompass\Contracts\NotificationContextResolver;
 use NotificationCompass\Contracts\NotificationDefinitionProvider;
 use NotificationCompass\Contracts\NotificationPreferenceStore;
@@ -18,6 +19,7 @@ use NotificationCompass\Resolution\PreferenceResolver;
 use NotificationCompass\Resolution\NotificationGate;
 use NotificationCompass\Stores\EloquentNotificationPreferenceStore;
 use NotificationCompass\Support\ConventionNotificationContextResolver;
+use NotificationCompass\Support\NullNotificationContextAuthorizer;
 
 final class NotificationCompassServiceProvider extends ServiceProvider
 {
@@ -26,6 +28,7 @@ final class NotificationCompassServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(__DIR__ . '/../config/notificationcompass.php', 'notificationcompass');
 
         $this->app->singleton(NotificationDefinitionRegistry::class);
+        $this->app->singleton(NotificationContextAuthorizer::class, NullNotificationContextAuthorizer::class);
         $this->app->singleton(NotificationContextResolver::class, ConventionNotificationContextResolver::class);
         $this->app->singleton(MutableNotificationPreferenceStore::class, EloquentNotificationPreferenceStore::class);
         $this->app->alias(MutableNotificationPreferenceStore::class, NotificationPreferenceStore::class);

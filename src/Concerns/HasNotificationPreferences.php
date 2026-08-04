@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace NotificationCompass\Concerns;
 
 use NotificationCompass\Contracts\MutableNotificationPreferenceStore;
+use NotificationCompass\Contracts\NotificationContextAuthorizer;
 use NotificationCompass\Managers\NotificationPreferenceManager;
 use NotificationCompass\Definitions\NotificationDefinitionRegistry;
 use NotificationCompass\Resolution\NotificationGate;
@@ -20,6 +21,7 @@ trait HasNotificationPreferences
             app(MutableNotificationPreferenceStore::class),
             app(PreferenceResolver::class),
             app(NotificationDefinitionRegistry::class),
+            app(NotificationContextAuthorizer::class),
         );
     }
 
