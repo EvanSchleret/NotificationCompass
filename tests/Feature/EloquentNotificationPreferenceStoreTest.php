@@ -256,6 +256,96 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
         ));
     }
 
+    public function test_cached_user_preferences_are_isolated_between_contexts_and_invalidated_on_change(): void
+    {
+        $this->app['config']->set('notificationcompass.cache.enabled', true);
+        $user = TestUser::query()->create();
+        $organization = new NotificationContext('organization', 10);
+        $team = new NotificationContext('team', 10);
+        $notification = new TestConfiguredNotification();
+
+        $user->enableNotification('event.booking_created', 'mail');
+
+        self::assertTrue($user->canReceiveNotification($notification, 'mail', $organization));
+        self::assertTrue($user->canReceiveNotification($notification, 'mail', $team));
+
+        $user->disableNotification('event.booking_created', 'mail', $organization);
+
+        self::assertFalse($user->canReceiveNotification($notification, 'mail', $organization));
+        self::assertTrue($user->canReceiveNotification($notification, 'mail', $team));
+
+        $user->disableNotification('event.booking_created', 'mail');
+
+        self::assertFalse($user->canReceiveNotification($notification, 'mail', $team));
+    }
+
+    public function test_contextual_preferences_override_global_preferences_without_leaking_to_other_contexts(): void
+    {
+        $user = TestUser::query()->create();
+        $organization = new NotificationContext('organization', 10);
+        $team = new NotificationContext('team', 10);
+        $notification = new TestConfiguredNotification();
+
+        $user->disableNotification('event.booking_created', 'mail');
+        $user->enableNotification('event.booking_created', 'mail', $organization);
+
+        self::assertTrue($user->canReceiveNotification($notification, 'mail', $organization));
+        self::assertFalse($user->canReceiveNotification($notification, 'mail', $team));
+    }
+
+    public function test_enforced_context_policy_overrides_user_preferences_and_reset_restores_them(): void
+    {
+        $this->app['config']->set('notificationcompass.cache.enabled', false);
+        $user = TestUser::query()->create();
+        $organization = new NotificationContext('organization', 10);
+        $otherOrganization = new NotificationContext('organization', 11);
+        $notification = new TestContextualNotification();
+        $store = $this->app->make(MutableNotificationContextPreferenceStore::class);
+
+        $user->enableNotification('event.contextual', 'mail');
+        $store->set(
+            $organization,
+            'event.contextual',
+            'mail',
+            false,
+            NotificationContextPreferenceMode::ENFORCED,
+        );
+
+        self::assertFalse($user->canReceiveNotification($notification, 'mail', $organization));
+        self::assertTrue($user->canReceiveNotification($notification, 'mail', $otherOrganization));
+
+        $store->forget($organization, 'event.contextual', 'mail');
+
+        self::assertTrue($user->canReceiveNotification($notification, 'mail', $organization));
+    }
+
+    public function test_missing_context_does_not_apply_a_contextual_preference(): void
+    {
+        $user = TestUser::query()->create();
+        $organization = new NotificationContext('organization', 10);
+        $notification = new TestConfiguredNotification();
+
+        $user->enableNotification('event.booking_created', 'mail');
+        $user->disableNotification('event.booking_created', 'mail', $organization);
+
+        self::assertFalse($user->canReceiveNotification($notification, 'mail', $organization));
+        self::assertTrue($user->canReceiveNotification($notification, 'mail'));
+    }
+
+    public function test_unauthorized_context_blocks_real_notification_delivery(): void
+    {
+        $this->app->instance(NotificationContextAuthorizer::class, new DenyingFeatureContextAuthorizer());
+        $user = TestUser::query()->create();
+
+        $result = $this->app['events']->dispatch(
+            new NotificationSending($user, new TestContextualNotification(), 'mail'),
+            [],
+            true,
+        );
+
+        self::assertFalse($result);
+    }
+
     public function test_user_preference_changes_dispatch_events_with_previous_and_new_values(): void
     {
         Event::fake();
