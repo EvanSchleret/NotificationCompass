@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace NotificationCompass\Resolution;
 
 use NotificationCompass\Contracts\NotificationPreferenceStore;
+use NotificationCompass\Contracts\NotificationContextPreferenceStore;
 use NotificationCompass\Definitions\NotificationDefinition;
 use NotificationCompass\Definitions\NotificationDefinitionRegistry;
 use NotificationCompass\ValueObjects\NotificationContext;
@@ -16,6 +17,7 @@ final readonly class PreferenceResolver
         private NotificationDefinitionRegistry $definitions,
         private array $channelDefaults,
         private bool $packageDefault,
+        private ?NotificationContextPreferenceStore $contextPreferences = null,
     ) {
     }
 
@@ -30,6 +32,13 @@ final readonly class PreferenceResolver
 
         if ($definition->isMandatoryFor($channel)) {
             return new ResolvedPreference(true, 'mandatory', true);
+        }
+
+        if ($context !== null && $this->contextPreferences !== null) {
+            $contextPreference = $this->contextPreferences->get($context, $notificationKey, $channel);
+            if ($contextPreference !== null) {
+                return new ResolvedPreference($contextPreference, 'context_policy', true);
+            }
         }
 
         $contextPreference = $preferences->get($notifiable, $notificationKey, $channel, $context);

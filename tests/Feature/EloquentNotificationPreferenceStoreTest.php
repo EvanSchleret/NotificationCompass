@@ -23,6 +23,7 @@ use NotificationCompass\Definitions\NotificationDefinitionRegistry;
 use NotificationCompass\Contracts\NotificationDefinitionProvider;
 use NotificationCompass\Definitions\NotificationDefinition;
 use NotificationCompass\NotificationCompassServiceProvider;
+use NotificationCompass\Stores\EloquentNotificationContextPreferenceStore;
 use NotificationCompass\Stores\EloquentNotificationPreferenceStore;
 use NotificationCompass\ValueObjects\NotificationContext;
 use Orchestra\Testbench\TestCase;
@@ -147,6 +148,44 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
         self::assertFalse($user->canReceiveNotification(new TestConfiguredNotification(), 'mail'));
         $user->enableNotification('event.booking_created', 'mail');
         self::assertTrue($user->canReceiveNotification(new TestConfiguredNotification(), 'mail'));
+    }
+
+    public function test_context_preferences_can_apply_a_policy_to_all_members(): void
+    {
+        $context = new NotificationContext('organization', 10);
+        $store = new EloquentNotificationContextPreferenceStore();
+        $store->set($context, 'event.contextual', 'mail', false);
+
+        $user = TestUser::query()->create();
+        $user->enableNotification('event.contextual', 'mail');
+
+        self::assertFalse($user->canReceiveNotification(
+            new TestContextualNotification(),
+            'mail',
+            $context,
+        ));
+        self::assertFalse($store->get($context, 'event.contextual', 'mail'));
+
+        $store->forget($context, 'event.contextual', 'mail');
+
+        self::assertNull($store->get($context, 'event.contextual', 'mail'));
+        self::assertTrue($user->canReceiveNotification(
+            new TestContextualNotification(),
+            'mail',
+            $context,
+        ));
+    }
+
+    public function test_context_preferences_are_isolated_by_context_key(): void
+    {
+        $store = new EloquentNotificationContextPreferenceStore();
+        $organization = new NotificationContext('organization', 10);
+        $team = new NotificationContext('team', 10);
+
+        $store->set($organization, 'event.contextual', 'mail', false);
+
+        self::assertFalse($store->get($organization, 'event.contextual', 'mail'));
+        self::assertNull($store->get($team, 'event.contextual', 'mail'));
     }
 
     public function test_definitions_are_loaded_from_configuration(): void

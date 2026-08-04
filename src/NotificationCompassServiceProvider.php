@@ -8,16 +8,19 @@ use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Notifications\Events\NotificationSending;
 use Illuminate\Support\ServiceProvider;
 use NotificationCompass\Contracts\NotificationContextAuthorizer;
+use NotificationCompass\Contracts\NotificationContextPreferenceStore;
 use NotificationCompass\Contracts\NotificationContextResolver;
 use NotificationCompass\Contracts\NotificationDefinitionProvider;
 use NotificationCompass\Contracts\NotificationPreferenceStore;
 use NotificationCompass\Contracts\MutableNotificationPreferenceStore;
+use NotificationCompass\Contracts\MutableNotificationContextPreferenceStore;
 use NotificationCompass\Definitions\NotificationDefinition;
 use NotificationCompass\Definitions\NotificationDefinitionRegistry;
 use NotificationCompass\Listeners\NotificationSendingListener;
 use NotificationCompass\Resolution\PreferenceResolver;
 use NotificationCompass\Resolution\NotificationGate;
 use NotificationCompass\Stores\EloquentNotificationPreferenceStore;
+use NotificationCompass\Stores\EloquentNotificationContextPreferenceStore;
 use NotificationCompass\Support\ConventionNotificationContextResolver;
 use NotificationCompass\Support\NullNotificationContextAuthorizer;
 
@@ -30,6 +33,14 @@ final class NotificationCompassServiceProvider extends ServiceProvider
         $this->app->singleton(NotificationDefinitionRegistry::class);
         $this->app->singleton(NotificationContextAuthorizer::class, NullNotificationContextAuthorizer::class);
         $this->app->singleton(NotificationContextResolver::class, ConventionNotificationContextResolver::class);
+        $this->app->singleton(
+            MutableNotificationContextPreferenceStore::class,
+            EloquentNotificationContextPreferenceStore::class,
+        );
+        $this->app->alias(
+            MutableNotificationContextPreferenceStore::class,
+            NotificationContextPreferenceStore::class,
+        );
         $this->app->singleton(MutableNotificationPreferenceStore::class, EloquentNotificationPreferenceStore::class);
         $this->app->alias(MutableNotificationPreferenceStore::class, NotificationPreferenceStore::class);
         $this->app->singleton(PreferenceResolver::class, function (Application $app): PreferenceResolver {
@@ -37,6 +48,7 @@ final class NotificationCompassServiceProvider extends ServiceProvider
                 $app->make(NotificationDefinitionRegistry::class),
                 $app['config']->get('notificationcompass.channels', []),
                 (bool) $app['config']->get('notificationcompass.default', false),
+                $app->make(NotificationContextPreferenceStore::class),
             );
         });
         $this->app->singleton(NotificationGate::class);

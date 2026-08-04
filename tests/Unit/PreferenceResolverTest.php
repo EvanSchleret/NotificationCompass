@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace NotificationCompass\Tests\Unit;
 
 use NotificationCompass\Contracts\NotificationPreferenceStore;
+use NotificationCompass\Contracts\NotificationContextPreferenceStore;
 use NotificationCompass\Definitions\NotificationDefinition;
 use NotificationCompass\Definitions\NotificationDefinitionRegistry;
 use NotificationCompass\Resolution\PreferenceResolver;
@@ -53,6 +54,33 @@ final class PreferenceResolverTest extends TestCase
         self::assertSame('user_context', $result->source);
     }
 
+    public function test_context_policies_win_over_user_preferences(): void
+    {
+        $registry = new NotificationDefinitionRegistry();
+        $registry->register(new NotificationDefinition(
+            'event.booking_created',
+            ['mail'],
+            defaults: ['mail' => true],
+        ));
+
+        $result = (new PreferenceResolver(
+            $registry,
+            ['mail' => true],
+            false,
+            new InMemoryContextPreferenceStore(false),
+        ))->resolve(
+            new class {},
+            'event.booking_created',
+            'mail',
+            new NotificationContext('organization', 42),
+            new InMemoryPreferenceStore(true, true),
+        );
+
+        self::assertFalse($result->enabled);
+        self::assertSame('context_policy', $result->source);
+        self::assertFalse($result->isModifiable());
+    }
+
     public function test_opt_in_notifications_are_disabled_without_an_explicit_default(): void
     {
         $registry = new NotificationDefinitionRegistry();
@@ -91,5 +119,20 @@ final readonly class InMemoryPreferenceStore implements NotificationPreferenceSt
         ?NotificationContext $context,
     ): ?bool {
         return $context === null ? $this->global : $this->context;
+    }
+}
+
+final readonly class InMemoryContextPreferenceStore implements NotificationContextPreferenceStore
+{
+    public function __construct(private ?bool $value)
+    {
+    }
+
+    public function get(
+        NotificationContext $context,
+        string $notificationKey,
+        string $channel,
+    ): ?bool {
+        return $this->value;
     }
 }
