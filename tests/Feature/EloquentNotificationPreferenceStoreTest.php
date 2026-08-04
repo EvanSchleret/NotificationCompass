@@ -62,13 +62,29 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
             'event.booking_created' => [
                 'channels' => ['mail', 'database'],
                 'defaults' => ['database' => true],
+                'metadata' => [
+                    'label' => 'Booking created',
+                    'description' => 'Notifications about newly created bookings.',
+                    'category' => 'activity',
+                    'order' => 20,
+                ],
+                'channel_metadata' => [
+                    'mail' => [
+                        'label' => 'Email',
+                        'description' => 'Send the notification by email.',
+                    ],
+                    'database' => ['visible' => false],
+                ],
                 'notification_class' => TestConfiguredNotification::class,
             ],
             'security.alert' => [
                 'channels' => ['mail', 'database'],
                 'mandatory_channels' => ['mail'],
                 'channel_options' => [
-                    'database' => ['hidden' => true, 'default' => true],
+                    'database' => ['default' => true],
+                ],
+                'channel_metadata' => [
+                    'database' => ['visible' => false],
                 ],
             ],
             'event.contextual' => [
@@ -339,6 +355,21 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
         self::assertSame(['mail', 'database'], $definition->channels);
         self::assertSame(TestConfiguredNotification::class, $definition->notificationClass);
         self::assertTrue($this->app->make(NotificationDefinitionRegistry::class)->has('digest.weekly'));
+    }
+
+    public function test_definition_metadata_is_structured_and_channel_visibility_is_descriptive(): void
+    {
+        $definition = $this->app->make(NotificationDefinitionRegistry::class)
+            ->get('event.booking_created');
+
+        self::assertSame('Booking created', $definition->metadata->label);
+        self::assertSame('Notifications about newly created bookings.', $definition->metadata->description);
+        self::assertSame('activity', $definition->metadata->category);
+        self::assertSame(20, $definition->metadata->order);
+        self::assertSame('Email', $definition->channelMetadata('mail')->label);
+        self::assertTrue($definition->channelMetadata('mail')->visible);
+        self::assertFalse($definition->channelMetadata('database')->visible);
+        self::assertTrue($definition->isHidden('database'));
     }
 
     public function test_inspection_api_exposes_channels_and_rules(): void

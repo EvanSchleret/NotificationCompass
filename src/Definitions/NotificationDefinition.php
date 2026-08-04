@@ -5,12 +5,24 @@ declare(strict_types=1);
 namespace NotificationCompass\Definitions;
 
 use InvalidArgumentException;
+use NotificationCompass\ValueObjects\NotificationChannelMetadata;
 use NotificationCompass\ValueObjects\NotificationContext;
+use NotificationCompass\ValueObjects\NotificationDefinitionMetadata;
 
 final readonly class NotificationDefinition
 {
     public static function fromConfig(string $key, array $attributes): self
     {
+        $metadata = NotificationDefinitionMetadata::fromConfig($attributes);
+        $channelOptions = $attributes['channel_options'] ?? [];
+        $channelMetadata = [];
+
+        foreach ((array) ($attributes['channel_metadata'] ?? []) as $channel => $channelAttributes) {
+            if (is_array($channelAttributes)) {
+                $channelMetadata[$channel] = NotificationChannelMetadata::fromConfig($channelAttributes);
+            }
+        }
+
         return new self(
             key: $key,
             channels: $attributes['channels'] ?? [],
@@ -20,12 +32,11 @@ final readonly class NotificationDefinition
             optIn: (bool) ($attributes['opt_in'] ?? false),
             contextDefaults: $attributes['context_defaults'] ?? [],
             notificationClass: $attributes['notification_class'] ?? null,
-            name: $attributes['name'] ?? null,
-            description: $attributes['description'] ?? null,
-            category: $attributes['category'] ?? null,
-            channelOptions: $attributes['channel_options'] ?? [],
+            channelOptions: $channelOptions,
             supportedContexts: $attributes['supported_contexts'] ?? [],
             configurable: (bool) ($attributes['configurable'] ?? true),
+            metadata: $metadata,
+            channelMetadata: $channelMetadata,
         );
     }
 
@@ -38,17 +49,20 @@ final readonly class NotificationDefinition
         public bool $optIn = false,
         public array $contextDefaults = [],
         public ?string $notificationClass = null,
-        public ?string $name = null,
-        public ?string $description = null,
-        public ?string $category = null,
         public array $channelOptions = [],
         public array $supportedContexts = [],
         public bool $configurable = true,
+        ?NotificationDefinitionMetadata $metadata = null,
+        public array $channelMetadata = [],
     ) {
+        $this->metadata = $metadata ?? new NotificationDefinitionMetadata();
+
         if ($this->key === '') {
             throw new InvalidArgumentException('A notification definition key cannot be empty.');
         }
     }
+
+    public readonly NotificationDefinitionMetadata $metadata;
 
     public function hasChannel(string $channel): bool
     {
@@ -84,7 +98,16 @@ final readonly class NotificationDefinition
 
     public function isHidden(string $channel): bool
     {
-        return (bool) ($this->channelOptions[$channel]['hidden'] ?? false);
+        return ! $this->channelMetadata($channel)->visible;
+    }
+
+    public function channelMetadata(string $channel): NotificationChannelMetadata
+    {
+        $metadata = $this->channelMetadata[$channel] ?? null;
+
+        return $metadata instanceof NotificationChannelMetadata
+            ? $metadata
+            : NotificationChannelMetadata::fromConfig(is_array($metadata) ? $metadata : []);
     }
 
     public function supportsContext(?NotificationContext $context): bool
