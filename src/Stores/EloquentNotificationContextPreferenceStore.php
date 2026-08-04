@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace NotificationCompass\Stores;
 
 use NotificationCompass\Contracts\MutableNotificationContextPreferenceStore;
-use NotificationCompass\Models\NotificationContextPreference;
+use NotificationCompass\Models\NotificationContextPreference as NotificationContextPreferenceModel;
 use NotificationCompass\ValueObjects\NotificationContext;
+use NotificationCompass\ValueObjects\NotificationContextPreference;
+use NotificationCompass\ValueObjects\NotificationContextPreferenceMode;
 
 final class EloquentNotificationContextPreferenceStore implements MutableNotificationContextPreferenceStore
 {
@@ -14,14 +16,16 @@ final class EloquentNotificationContextPreferenceStore implements MutableNotific
         NotificationContext $context,
         string $notificationKey,
         string $channel,
-    ): ?bool {
-        $preference = NotificationContextPreference::query()
+    ): ?NotificationContextPreference {
+        $preference = NotificationContextPreferenceModel::query()
             ->where('context_key', $context->key())
             ->where('notification_key', $notificationKey)
             ->where('channel', $channel)
             ->first();
 
-        return $preference?->enabled;
+        return $preference === null
+            ? null
+            : new NotificationContextPreference($preference->enabled, $preference->mode);
     }
 
     public function set(
@@ -29,14 +33,18 @@ final class EloquentNotificationContextPreferenceStore implements MutableNotific
         string $notificationKey,
         string $channel,
         bool $enabled,
+        NotificationContextPreferenceMode $mode = NotificationContextPreferenceMode::DEFAULT,
     ): void {
-        NotificationContextPreference::query()->updateOrCreate(
+        NotificationContextPreferenceModel::query()->updateOrCreate(
             [
                 'context_key' => $context->key(),
                 'notification_key' => $notificationKey,
                 'channel' => $channel,
             ],
-            ['enabled' => $enabled],
+            [
+                'enabled' => $enabled,
+                'mode' => $mode->value,
+            ],
         );
     }
 
@@ -45,7 +53,7 @@ final class EloquentNotificationContextPreferenceStore implements MutableNotific
         string $notificationKey,
         string $channel,
     ): void {
-        NotificationContextPreference::query()
+        NotificationContextPreferenceModel::query()
             ->where('context_key', $context->key())
             ->where('notification_key', $notificationKey)
             ->where('channel', $channel)

@@ -10,7 +10,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create(config('notificationcompass.context_table', 'notification_context_preferences'), function (Blueprint $table): void {
+        Schema::create(config('notificationcompass.context_table', 'notificationcompass_context_preferences'), function (Blueprint $table): void {
             $table->id();
             $table->string('context_key');
             $table->string('notification_key');
@@ -22,13 +22,13 @@ return new class extends Migration
                 'context_key',
                 'notification_key',
                 'channel',
-            ], 'notification_context_preferences_unique');
+            ], 'notificationcompass_context_preferences_unique');
             $table->index('context_key');
         });
     }
 
     public function down(): void
     {
-        Schema::dropIfExists(config('notificationcompass.context_table', 'notification_context_preferences'));
+        Schema::dropIfExists(config('notificationcompass.context_table', 'notificationcompass_context_preferences'));
     }
 };

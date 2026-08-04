@@ -26,6 +26,7 @@ use NotificationCompass\NotificationCompassServiceProvider;
 use NotificationCompass\Stores\EloquentNotificationContextPreferenceStore;
 use NotificationCompass\Stores\EloquentNotificationPreferenceStore;
 use NotificationCompass\ValueObjects\NotificationContext;
+use NotificationCompass\ValueObjects\NotificationContextPreferenceMode;
 use Orchestra\Testbench\TestCase;
 use InvalidArgumentException;
 use LogicException;
@@ -154,7 +155,13 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
     {
         $context = new NotificationContext('organization', 10);
         $store = new EloquentNotificationContextPreferenceStore();
-        $store->set($context, 'event.contextual', 'mail', false);
+        $store->set(
+            $context,
+            'event.contextual',
+            'mail',
+            false,
+            NotificationContextPreferenceMode::ENFORCED,
+        );
 
         $user = TestUser::query()->create();
         $user->enableNotification('event.contextual', 'mail');
@@ -164,7 +171,10 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
             'mail',
             $context,
         ));
-        self::assertFalse($store->get($context, 'event.contextual', 'mail'));
+        $preference = $store->get($context, 'event.contextual', 'mail');
+        self::assertNotNull($preference);
+        self::assertFalse($preference->enabled);
+        self::assertSame(NotificationContextPreferenceMode::ENFORCED, $preference->mode);
 
         $store->forget($context, 'event.contextual', 'mail');
 
@@ -184,7 +194,7 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
 
         $store->set($organization, 'event.contextual', 'mail', false);
 
-        self::assertFalse($store->get($organization, 'event.contextual', 'mail'));
+        self::assertFalse($store->get($organization, 'event.contextual', 'mail')?->enabled);
         self::assertNull($store->get($team, 'event.contextual', 'mail'));
     }
 

@@ -9,6 +9,8 @@ use NotificationCompass\Contracts\NotificationContextPreferenceStore;
 use NotificationCompass\Definitions\NotificationDefinition;
 use NotificationCompass\Definitions\NotificationDefinitionRegistry;
 use NotificationCompass\ValueObjects\NotificationContext;
+use NotificationCompass\ValueObjects\NotificationContextPreference;
+use NotificationCompass\ValueObjects\NotificationContextPreferenceMode;
 
 final readonly class PreferenceResolver
 {
@@ -34,21 +36,23 @@ final readonly class PreferenceResolver
             return new ResolvedPreference(true, 'mandatory', true);
         }
 
-        if ($context !== null && $this->contextPreferences !== null) {
-            $contextPreference = $this->contextPreferences->get($context, $notificationKey, $channel);
-            if ($contextPreference !== null) {
-                return new ResolvedPreference($contextPreference, 'context_policy', true);
-            }
+        $contextPreference = $this->contextPreference($context, $notificationKey, $channel);
+        if ($contextPreference?->mode === NotificationContextPreferenceMode::ENFORCED) {
+            return $this->resolvedContextPreference($contextPreference);
         }
 
-        $contextPreference = $preferences->get($notifiable, $notificationKey, $channel, $context);
-        if ($contextPreference !== null && $context !== null) {
-            return new ResolvedPreference($contextPreference, 'user_context');
+        $userContextPreference = $preferences->get($notifiable, $notificationKey, $channel, $context);
+        if ($userContextPreference !== null && $context !== null) {
+            return new ResolvedPreference($userContextPreference, 'user_context');
         }
 
         $globalPreference = $preferences->get($notifiable, $notificationKey, $channel, null);
         if ($globalPreference !== null) {
             return new ResolvedPreference($globalPreference, 'user_global');
+        }
+
+        if ($contextPreference !== null) {
+            return $this->resolvedContextPreference($contextPreference);
         }
 
         $contextDefault = $this->contextDefault($definition, $context, $channel);
@@ -74,6 +78,28 @@ final readonly class PreferenceResolver
         }
 
         return new ResolvedPreference($this->packageDefault, 'package_default');
+    }
+
+    private function contextPreference(
+        ?NotificationContext $context,
+        string $notificationKey,
+        string $channel,
+    ): ?NotificationContextPreference {
+        if ($context === null || $this->contextPreferences === null) {
+            return null;
+        }
+
+        return $this->contextPreferences->get($context, $notificationKey, $channel);
+    }
+
+    private function resolvedContextPreference(NotificationContextPreference $preference): ResolvedPreference
+    {
+        return new ResolvedPreference(
+            $preference->enabled,
+            'context_policy',
+            false,
+            $preference->mode,
+        );
     }
 
     private function contextDefault(

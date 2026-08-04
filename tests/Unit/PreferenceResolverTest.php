@@ -10,6 +10,8 @@ use NotificationCompass\Definitions\NotificationDefinition;
 use NotificationCompass\Definitions\NotificationDefinitionRegistry;
 use NotificationCompass\Resolution\PreferenceResolver;
 use NotificationCompass\ValueObjects\NotificationContext;
+use NotificationCompass\ValueObjects\NotificationContextPreference;
+use NotificationCompass\ValueObjects\NotificationContextPreferenceMode;
 use PHPUnit\Framework\TestCase;
 
 final class PreferenceResolverTest extends TestCase
@@ -67,7 +69,7 @@ final class PreferenceResolverTest extends TestCase
             $registry,
             ['mail' => true],
             false,
-            new InMemoryContextPreferenceStore(false),
+            new InMemoryContextPreferenceStore(false, NotificationContextPreferenceMode::ENFORCED),
         ))->resolve(
             new class {},
             'event.booking_created',
@@ -79,6 +81,58 @@ final class PreferenceResolverTest extends TestCase
         self::assertFalse($result->enabled);
         self::assertSame('context_policy', $result->source);
         self::assertFalse($result->isModifiable());
+    }
+
+    public function test_default_context_policies_can_be_overridden_by_user_preferences(): void
+    {
+        $registry = new NotificationDefinitionRegistry();
+        $registry->register(new NotificationDefinition('event.booking_created', ['mail']));
+
+        $result = (new PreferenceResolver(
+            $registry,
+            ['mail' => true],
+            false,
+            new InMemoryContextPreferenceStore(false),
+        ))->resolve(
+            new class {},
+            'event.booking_created',
+            'mail',
+            new NotificationContext('organization', 42),
+            new InMemoryPreferenceStore(true, true),
+        );
+
+        self::assertTrue($result->enabled);
+        self::assertSame('user_context', $result->source);
+        self::assertNull($result->mode);
+        self::assertTrue($result->isModifiable());
+    }
+
+    public function test_default_context_policy_is_used_after_user_preferences(): void
+    {
+        $registry = new NotificationDefinitionRegistry();
+        $registry->register(new NotificationDefinition(
+            'event.booking_created',
+            ['mail'],
+            defaults: ['mail' => true],
+        ));
+
+        $result = (new PreferenceResolver(
+            $registry,
+            ['mail' => true],
+            false,
+            new InMemoryContextPreferenceStore(false),
+        ))->resolve(
+            new class {},
+            'event.booking_created',
+            'mail',
+            new NotificationContext('organization', 42),
+            new InMemoryPreferenceStore(),
+        );
+
+        self::assertFalse($result->enabled);
+        self::assertSame('context_policy', $result->source);
+        self::assertSame(NotificationContextPreferenceMode::DEFAULT, $result->mode);
+        self::assertTrue($result->isModifiable());
     }
 
     public function test_opt_in_notifications_are_disabled_without_an_explicit_default(): void
@@ -124,7 +178,10 @@ final readonly class InMemoryPreferenceStore implements NotificationPreferenceSt
 
 final readonly class InMemoryContextPreferenceStore implements NotificationContextPreferenceStore
 {
-    public function __construct(private ?bool $value)
+    public function __construct(
+        private ?bool $value,
+        private NotificationContextPreferenceMode $mode = NotificationContextPreferenceMode::DEFAULT,
+    )
     {
     }
 
@@ -132,7 +189,9 @@ final readonly class InMemoryContextPreferenceStore implements NotificationConte
         NotificationContext $context,
         string $notificationKey,
         string $channel,
-    ): ?bool {
-        return $this->value;
+    ): ?NotificationContextPreference {
+        return $this->value === null
+            ? null
+            : new NotificationContextPreference($this->value, $this->mode);
     }
 }

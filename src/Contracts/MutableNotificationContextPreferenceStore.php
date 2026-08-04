@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace NotificationCompass\Contracts;
 
 use NotificationCompass\ValueObjects\NotificationContext;
+use NotificationCompass\ValueObjects\NotificationContextPreferenceMode;
 
 interface MutableNotificationContextPreferenceStore extends NotificationContextPreferenceStore
 {
@@ -13,6 +14,7 @@ interface MutableNotificationContextPreferenceStore extends NotificationContextP
         string $notificationKey,
         string $channel,
         bool $enabled,
+        NotificationContextPreferenceMode $mode = NotificationContextPreferenceMode::DEFAULT,
     ): void;
 
     public function forget(

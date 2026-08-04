@@ -16,6 +16,6 @@ final class NotificationPreference extends Model
 
     public function getTable(): string
     {
-        return (string) config('notificationcompass.table', 'notification_preferences');
+        return (string) config('notificationcompass.table', 'notificationcompass_preferences');
     }
 }
