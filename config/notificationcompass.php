@@ -9,4 +9,10 @@ return [
     'definition_providers' => [],
     'default' => false,
     'channels' => [],
+    'cache' => [
+        'enabled' => true,
+        'store' => null,
+        'ttl' => 300,
+        'prefix' => 'notificationcompass:preferences',
+    ],
 ];

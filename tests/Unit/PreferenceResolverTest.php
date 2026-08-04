@@ -6,9 +6,11 @@ namespace NotificationCompass\Tests\Unit;
 
 use NotificationCompass\Contracts\NotificationPreferenceStore;
 use NotificationCompass\Contracts\NotificationContextPreferenceStore;
+use NotificationCompass\Contracts\NotificationPreferenceCache;
 use NotificationCompass\Definitions\NotificationDefinition;
 use NotificationCompass\Definitions\NotificationDefinitionRegistry;
 use NotificationCompass\Resolution\PreferenceResolver;
+use NotificationCompass\Resolution\ResolvedPreference;
 use NotificationCompass\ValueObjects\NotificationContext;
 use NotificationCompass\ValueObjects\NotificationContextPreference;
 use NotificationCompass\ValueObjects\NotificationContextPreferenceMode;
@@ -152,6 +154,31 @@ final class PreferenceResolverTest extends TestCase
         self::assertSame('opt_in_default', $result->source);
     }
 
+    public function test_resolved_preferences_are_read_from_cache_before_store_resolution(): void
+    {
+        $registry = new NotificationDefinitionRegistry();
+        $registry->register(new NotificationDefinition('event.booking_created', ['mail']));
+        $cached = new ResolvedPreference(false, 'cached');
+        $cache = new InMemoryPreferenceCache($cached);
+
+        $result = (new PreferenceResolver(
+            $registry,
+            ['mail' => true],
+            false,
+            null,
+            $cache,
+        ))->resolve(
+            new class {},
+            'event.booking_created',
+            'mail',
+            new NotificationContext('organization', 42),
+            new InMemoryPreferenceStore(true, true),
+        );
+
+        self::assertSame($cached, $result);
+        self::assertFalse($cache->wasWritten);
+    }
+
     private function resolver(NotificationDefinitionRegistry $registry): PreferenceResolver
     {
         return new PreferenceResolver($registry, ['mail' => true], false);
@@ -193,5 +220,42 @@ final readonly class InMemoryContextPreferenceStore implements NotificationConte
         return $this->value === null
             ? null
             : new NotificationContextPreference($this->value, $this->mode);
+    }
+}
+
+final class InMemoryPreferenceCache implements NotificationPreferenceCache
+{
+    public bool $wasWritten = false;
+
+    public function __construct(private ?ResolvedPreference $value = null)
+    {
+    }
+
+    public function get(
+        object $notifiable,
+        string $notificationKey,
+        string $channel,
+        ?NotificationContext $context,
+    ): ?ResolvedPreference {
+        return $this->value;
+    }
+
+    public function put(
+        object $notifiable,
+        string $notificationKey,
+        string $channel,
+        ?NotificationContext $context,
+        ResolvedPreference $preference,
+    ): void {
+        $this->wasWritten = true;
+        $this->value = $preference;
+    }
+
+    public function invalidateNotifiable(object $notifiable): void
+    {
+    }
+
+    public function invalidateContext(NotificationContext $context): void
+    {
     }
 }

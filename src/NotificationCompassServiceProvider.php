@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace NotificationCompass;
 
 use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Contracts\Cache\Factory as CacheFactory;
 use Illuminate\Notifications\Events\NotificationSending;
 use Illuminate\Support\ServiceProvider;
 use NotificationCompass\Contracts\NotificationContextAuthorizer;
@@ -12,6 +13,7 @@ use NotificationCompass\Contracts\NotificationContextPreferenceStore;
 use NotificationCompass\Contracts\NotificationContextResolver;
 use NotificationCompass\Contracts\NotificationDefinitionProvider;
 use NotificationCompass\Contracts\NotificationPreferenceStore;
+use NotificationCompass\Contracts\NotificationPreferenceCache;
 use NotificationCompass\Contracts\MutableNotificationPreferenceStore;
 use NotificationCompass\Contracts\MutableNotificationContextPreferenceStore;
 use NotificationCompass\Definitions\NotificationDefinition;
@@ -23,6 +25,8 @@ use NotificationCompass\Stores\EloquentNotificationPreferenceStore;
 use NotificationCompass\Stores\EloquentNotificationContextPreferenceStore;
 use NotificationCompass\Support\ConventionNotificationContextResolver;
 use NotificationCompass\Support\NullNotificationContextAuthorizer;
+use NotificationCompass\Support\NullNotificationPreferenceCache;
+use NotificationCompass\Support\LaravelNotificationPreferenceCache;
 
 final class NotificationCompassServiceProvider extends ServiceProvider
 {
@@ -43,12 +47,26 @@ final class NotificationCompassServiceProvider extends ServiceProvider
         );
         $this->app->singleton(MutableNotificationPreferenceStore::class, EloquentNotificationPreferenceStore::class);
         $this->app->alias(MutableNotificationPreferenceStore::class, NotificationPreferenceStore::class);
+        $this->app->singleton(NotificationPreferenceCache::class, function (Application $app): NotificationPreferenceCache {
+            if (! (bool) $app['config']->get('notificationcompass.cache.enabled', true)) {
+                return new NullNotificationPreferenceCache();
+            }
+
+            $store = $app['config']->get('notificationcompass.cache.store');
+
+            return new LaravelNotificationPreferenceCache(
+                $app->make(CacheFactory::class)->store(is_string($store) ? $store : null),
+                (int) $app['config']->get('notificationcompass.cache.ttl', 300),
+                (string) $app['config']->get('notificationcompass.cache.prefix', 'notificationcompass:preferences'),
+            );
+        });
         $this->app->singleton(PreferenceResolver::class, function (Application $app): PreferenceResolver {
             return new PreferenceResolver(
                 $app->make(NotificationDefinitionRegistry::class),
                 $app['config']->get('notificationcompass.channels', []),
                 (bool) $app['config']->get('notificationcompass.default', false),
                 $app->make(NotificationContextPreferenceStore::class),
+                $app->make(NotificationPreferenceCache::class),
             );
         });
         $this->app->singleton(NotificationGate::class);

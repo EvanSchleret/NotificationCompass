@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace NotificationCompass\Resolution;
 
 use NotificationCompass\Contracts\NotificationPreferenceStore;
+use NotificationCompass\Contracts\NotificationPreferenceCache;
 use NotificationCompass\Contracts\NotificationContextPreferenceStore;
 use NotificationCompass\Definitions\NotificationDefinition;
 use NotificationCompass\Definitions\NotificationDefinitionRegistry;
@@ -20,10 +21,35 @@ final readonly class PreferenceResolver
         private array $channelDefaults,
         private bool $packageDefault,
         private ?NotificationContextPreferenceStore $contextPreferences = null,
+        private ?NotificationPreferenceCache $cache = null,
     ) {
     }
 
     public function resolve(
+        object $notifiable,
+        string $notificationKey,
+        string $channel,
+        ?NotificationContext $context,
+        NotificationPreferenceStore $preferences,
+    ): ResolvedPreference {
+        $cached = $this->cache?->get($notifiable, $notificationKey, $channel, $context);
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        $preference = $this->resolveWithoutCache(
+            $notifiable,
+            $notificationKey,
+            $channel,
+            $context,
+            $preferences,
+        );
+        $this->cache?->put($notifiable, $notificationKey, $channel, $context, $preference);
+
+        return $preference;
+    }
+
+    private function resolveWithoutCache(
         object $notifiable,
         string $notificationKey,
         string $channel,

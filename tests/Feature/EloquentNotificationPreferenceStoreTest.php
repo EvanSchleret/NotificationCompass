@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Notification as NotificationFacade;
 use Illuminate\Support\Facades\Schema;
 use NotificationCompass\Concerns\HasNotificationPreferences;
 use NotificationCompass\Contracts\NotificationContextAuthorizer;
+use NotificationCompass\Contracts\MutableNotificationContextPreferenceStore;
 use NotificationCompass\Definitions\NotificationDefinitionRegistry;
 use NotificationCompass\Contracts\NotificationDefinitionProvider;
 use NotificationCompass\Definitions\NotificationDefinition;
@@ -196,6 +197,43 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
 
         self::assertFalse($store->get($organization, 'event.contextual', 'mail')?->enabled);
         self::assertNull($store->get($team, 'event.contextual', 'mail'));
+    }
+
+    public function test_resolved_preference_cache_is_invalidated_after_context_policy_changes(): void
+    {
+        $this->app['config']->set('notificationcompass.cache.enabled', true);
+        $user = TestUser::query()->create();
+        $user->enableNotification('event.contextual', 'mail');
+        $context = new NotificationContext('organization', 10);
+        $store = $this->app->make(MutableNotificationContextPreferenceStore::class);
+
+        self::assertTrue($user->canReceiveNotification(
+            new TestContextualNotification(),
+            'mail',
+            $context,
+        ));
+
+        $store->set(
+            $context,
+            'event.contextual',
+            'mail',
+            false,
+            NotificationContextPreferenceMode::ENFORCED,
+        );
+
+        self::assertFalse($user->canReceiveNotification(
+            new TestContextualNotification(),
+            'mail',
+            $context,
+        ));
+
+        $store->forget($context, 'event.contextual', 'mail');
+
+        self::assertTrue($user->canReceiveNotification(
+            new TestContextualNotification(),
+            'mail',
+            $context,
+        ));
     }
 
     public function test_definitions_are_loaded_from_configuration(): void

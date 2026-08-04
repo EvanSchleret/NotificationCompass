@@ -4,15 +4,24 @@ declare(strict_types=1);
 
 namespace NotificationCompass\Stores;
 
+use Illuminate\Container\Container;
 use Illuminate\Database\Eloquent\Model;
 use InvalidArgumentException;
 use NotificationCompass\Contracts\MutableNotificationPreferenceStore;
 use NotificationCompass\Contracts\InspectableNotificationPreferenceStore;
+use NotificationCompass\Contracts\NotificationPreferenceCache;
 use NotificationCompass\Models\NotificationPreference;
 use NotificationCompass\ValueObjects\NotificationContext;
 
 final class EloquentNotificationPreferenceStore implements MutableNotificationPreferenceStore, InspectableNotificationPreferenceStore
 {
+    private readonly ?NotificationPreferenceCache $cache;
+
+    public function __construct(?NotificationPreferenceCache $cache = null)
+    {
+        $this->cache = $cache ?? $this->containerCache();
+    }
+
     public function get(
         object $notifiable,
         string $notificationKey,
@@ -45,6 +54,7 @@ final class EloquentNotificationPreferenceStore implements MutableNotificationPr
             ],
             ['enabled' => $enabled],
         );
+        $this->cache?->invalidateNotifiable($notifiable);
     }
 
     public function forget(
@@ -59,6 +69,7 @@ final class EloquentNotificationPreferenceStore implements MutableNotificationPr
             ->where('channel', $channel)
             ->where('context_key', $this->contextKey($context))
             ->delete();
+        $this->cache?->invalidateNotifiable($notifiable);
     }
 
     public function all(object $notifiable): array
@@ -92,5 +103,14 @@ final class EloquentNotificationPreferenceStore implements MutableNotificationPr
     private function contextKey(?NotificationContext $context): string
     {
         return $context?->key() ?? '';
+    }
+
+    private function containerCache(): ?NotificationPreferenceCache
+    {
+        $container = Container::getInstance();
+
+        return $container->bound(NotificationPreferenceCache::class)
+            ? $container->make(NotificationPreferenceCache::class)
+            : null;
     }
 }
