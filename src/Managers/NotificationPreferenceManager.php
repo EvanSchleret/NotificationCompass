@@ -12,6 +12,7 @@ use NotificationCompass\Definitions\NotificationDefinitionRegistry;
 use NotificationCompass\Resolution\PreferenceResolver;
 use NotificationCompass\Resolution\ResolvedPreference;
 use NotificationCompass\ValueObjects\NotificationContext;
+use NotificationCompass\ValueObjects\NotificationPreferenceInspection;
 use InvalidArgumentException;
 use LogicException;
 
@@ -80,6 +81,30 @@ final readonly class NotificationPreferenceManager
                     $definition->key,
                     $channel,
                     $context,
+                );
+            }
+        }
+
+        return $preferences;
+    }
+
+    /** @return array<string, array<string, NotificationPreferenceInspection>> */
+    public function inspectPreferences(?NotificationContext $context = null): array
+    {
+        $this->assertContextAuthorized($context);
+
+        $preferences = [];
+
+        foreach ($this->definitions->all() as $definition) {
+            if (! $definition->supportsContext($context)) {
+                continue;
+            }
+
+            foreach ($definition->channels as $channel) {
+                $preferences[$definition->key][$channel] = NotificationPreferenceInspection::fromResolved(
+                    $definition,
+                    $channel,
+                    $this->effective($definition->key, $channel, $context),
                 );
             }
         }

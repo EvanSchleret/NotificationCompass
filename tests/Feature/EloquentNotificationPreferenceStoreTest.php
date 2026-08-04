@@ -402,6 +402,42 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
         self::assertSame('user_global', $effective['event.booking_created']['mail']->source);
     }
 
+    public function test_contextual_inspection_exposes_definition_channel_and_resolution_metadata(): void
+    {
+        $user = TestUser::query()->create();
+        $context = new NotificationContext('organization', 10);
+        $user->enableNotification('event.contextual', 'mail', $context);
+
+        $inspection = $user->notificationPreferences()->inspectPreferences($context);
+        $userContext = $inspection['event.contextual']['mail'];
+
+        self::assertSame('event.contextual', $userContext->definition->key);
+        self::assertSame(['mail'], $userContext->definition->channels);
+        self::assertSame('mail', $userContext->channel);
+        self::assertTrue($userContext->enabled);
+        self::assertSame('user_context', $userContext->source);
+        self::assertTrue($userContext->modifiable);
+        self::assertFalse($userContext->mandatory);
+        self::assertNull($userContext->mode);
+
+        $contextStore = $this->app->make(MutableNotificationContextPreferenceStore::class);
+        $contextStore->set(
+            $context,
+            'event.contextual',
+            'mail',
+            false,
+            NotificationContextPreferenceMode::ENFORCED,
+        );
+
+        $policy = $user->notificationPreferences()->inspectPreferences($context)['event.contextual']['mail'];
+
+        self::assertFalse($policy->enabled);
+        self::assertSame('context_policy', $policy->source);
+        self::assertFalse($policy->isModifiable());
+        self::assertFalse($policy->modifiable);
+        self::assertSame(NotificationContextPreferenceMode::ENFORCED, $policy->mode);
+    }
+
     public function test_context_types_outside_a_definition_are_rejected(): void
     {
         $user = TestUser::query()->create();
