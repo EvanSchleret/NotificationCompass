@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Schema;
 use NotificationCompass\Concerns\HasNotificationPreferences;
 use NotificationCompass\Contracts\NotificationContextAuthorizer;
+use NotificationCompass\Contracts\NotificationContextPolicyAuthorizer;
 use NotificationCompass\Contracts\MutableNotificationContextPreferenceStore;
 use NotificationCompass\Definitions\NotificationDefinitionRegistry;
 use NotificationCompass\Contracts\NotificationDefinitionProvider;
@@ -211,23 +212,25 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
     public function test_context_policy_manager_handles_policy_lifecycle_and_inspection(): void
     {
         $manager = $this->app->make(NotificationContextPreferenceManager::class);
+        $administrator = TestUser::query()->create();
         $context = new NotificationContext('organization', 10);
 
-        self::assertNull($manager->get($context, 'event.contextual', 'mail'));
+        self::assertNull($manager->get($administrator, $context, 'event.contextual', 'mail'));
 
         $manager->disable(
+            $administrator,
             $context,
             'event.contextual',
             'mail',
             NotificationContextPreferenceMode::DEFAULT,
         );
 
-        $policy = $manager->get($context, 'event.contextual', 'mail');
+        $policy = $manager->get($administrator, $context, 'event.contextual', 'mail');
         self::assertNotNull($policy);
         self::assertFalse($policy->enabled);
         self::assertSame(NotificationContextPreferenceMode::DEFAULT, $policy->mode);
 
-        $inspection = $manager->inspect($context);
+        $inspection = $manager->inspect($administrator, $context);
         $contextPolicy = $inspection['event.contextual']['mail'];
         self::assertTrue($contextPolicy->isConfigured());
         self::assertTrue($contextPolicy->modifiable);
@@ -235,22 +238,23 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
         self::assertSame(NotificationContextPreferenceMode::DEFAULT, $contextPolicy->mode);
 
         $manager->enable(
+            $administrator,
             $context,
             'event.contextual',
             'mail',
             NotificationContextPreferenceMode::ENFORCED,
         );
 
-        self::assertTrue($manager->get($context, 'event.contextual', 'mail')?->enabled);
+        self::assertTrue($manager->get($administrator, $context, 'event.contextual', 'mail')?->enabled);
         self::assertSame(
             NotificationContextPreferenceMode::ENFORCED,
-            $manager->inspect($context)['event.contextual']['mail']->mode,
+            $manager->inspect($administrator, $context)['event.contextual']['mail']->mode,
         );
 
-        $manager->reset($context, 'event.contextual', 'mail');
+        $manager->reset($administrator, $context, 'event.contextual', 'mail');
 
-        self::assertNull($manager->get($context, 'event.contextual', 'mail'));
-        self::assertFalse($manager->inspect($context)['event.contextual']['mail']->isConfigured());
+        self::assertNull($manager->get($administrator, $context, 'event.contextual', 'mail'));
+        self::assertFalse($manager->inspect($administrator, $context)['event.contextual']['mail']->isConfigured());
     }
 
     public function test_context_policy_manager_rejects_undeclared_channels(): void
@@ -259,6 +263,7 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
 
         $this->expectException(InvalidArgumentException::class);
         $manager->set(
+            new TestUser(),
             new NotificationContext('organization', 10),
             'event.contextual',
             'database',
@@ -272,6 +277,7 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
 
         $this->expectException(InvalidArgumentException::class);
         $manager->set(
+            new TestUser(),
             new NotificationContext('project', 10),
             'event.contextual',
             'mail',
@@ -285,11 +291,51 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
 
         $this->expectException(LogicException::class);
         $manager->set(
+            new TestUser(),
             new NotificationContext('organization', 10),
             'security.alert',
             'mail',
             true,
         );
+    }
+
+    public function test_context_policy_manager_checks_administrator_authorization(): void
+    {
+        $this->app->instance(
+            NotificationContextPolicyAuthorizer::class,
+            new DenyingFeatureContextPolicyAuthorizer(),
+        );
+        $manager = $this->app->make(NotificationContextPreferenceManager::class);
+
+        $this->expectException(LogicException::class);
+        $manager->inspect(new TestUser(), new NotificationContext('organization', 10));
+    }
+
+    public function test_strict_authorization_blocks_context_preference_access(): void
+    {
+        $this->app['config']->set('notificationcompass.authorization.strict', true);
+        $user = TestUser::query()->create();
+
+        $this->expectException(LogicException::class);
+        $user->notificationPreferences()->effective(
+            'event.booking_created',
+            'mail',
+            new NotificationContext('organization', 10),
+        );
+    }
+
+    public function test_strict_authorization_blocks_contextual_notification_delivery(): void
+    {
+        $this->app['config']->set('notificationcompass.authorization.strict', true);
+        $user = TestUser::query()->create();
+
+        $result = $this->app['events']->dispatch(
+            new NotificationSending($user, new TestContextualNotification(), 'mail'),
+            [],
+            true,
+        );
+
+        self::assertFalse($result);
     }
 
     public function test_context_preferences_are_isolated_by_context_key(): void
@@ -669,6 +715,15 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
         );
     }
 
+    public function test_context_authorizer_protects_explicit_preference_inspection(): void
+    {
+        $this->app->instance(NotificationContextAuthorizer::class, new DenyingFeatureContextAuthorizer());
+        $user = TestUser::query()->create();
+
+        $this->expectException(LogicException::class);
+        $user->notificationPreferences()->explicitPreferences(new NotificationContext('organization', 7));
+    }
+
     public function test_laravel_event_listener_applies_the_same_decision_to_each_channel(): void
     {
         $user = TestUser::query()->create();
@@ -859,6 +914,14 @@ final class TestDefinitionProvider implements NotificationDefinitionProvider
 final class DenyingFeatureContextAuthorizer implements NotificationContextAuthorizer
 {
     public function authorize(object $notifiable, NotificationContext $context): bool
+    {
+        return false;
+    }
+}
+
+final class DenyingFeatureContextPolicyAuthorizer implements NotificationContextPolicyAuthorizer
+{
+    public function authorize(object $administrator, NotificationContext $context): bool
     {
         return false;
     }

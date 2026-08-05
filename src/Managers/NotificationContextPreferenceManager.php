@@ -7,7 +7,7 @@ namespace NotificationCompass\Managers;
 use InvalidArgumentException;
 use LogicException;
 use NotificationCompass\Contracts\MutableNotificationContextPreferenceStore;
-use NotificationCompass\Definitions\NotificationDefinition;
+use NotificationCompass\Contracts\NotificationContextPolicyAuthorizer;
 use NotificationCompass\Definitions\NotificationDefinitionRegistry;
 use NotificationCompass\ValueObjects\NotificationContext;
 use NotificationCompass\ValueObjects\NotificationContextPreference;
@@ -18,71 +18,72 @@ final readonly class NotificationContextPreferenceManager
 {
     public function __construct(
         private MutableNotificationContextPreferenceStore $store,
-        private NotificationDefinitionRegistry            $definitions,
-    )
-    {
+        private NotificationDefinitionRegistry $definitions,
+        private NotificationContextPolicyAuthorizer $authorizer,
+    ) {
     }
 
     public function get(
+        object $administrator,
         NotificationContext $context,
-        string              $notificationKey,
-        string              $channel,
-    ): ?NotificationContextPreference
-    {
-        $this->assertPolicySupported($context, $notificationKey, $channel);
+        string $notificationKey,
+        string $channel,
+    ): ?NotificationContextPreference {
+        $this->assertPolicySupported($administrator, $context, $notificationKey, $channel);
 
         return $this->store->get($context, $notificationKey, $channel);
     }
 
     public function set(
-        NotificationContext               $context,
-        string                            $notificationKey,
-        string                            $channel,
-        bool                              $enabled,
+        object $administrator,
+        NotificationContext $context,
+        string $notificationKey,
+        string $channel,
+        bool $enabled,
         NotificationContextPreferenceMode $mode = NotificationContextPreferenceMode::DEFAULT,
-    ): void
-    {
-        $this->assertPolicySupported($context, $notificationKey, $channel);
+    ): void {
+        $this->assertPolicySupported($administrator, $context, $notificationKey, $channel);
         $this->store->set($context, $notificationKey, $channel, $enabled, $mode);
     }
 
     public function enable(
-        NotificationContext               $context,
-        string                            $notificationKey,
-        string                            $channel,
+        object $administrator,
+        NotificationContext $context,
+        string $notificationKey,
+        string $channel,
         NotificationContextPreferenceMode $mode = NotificationContextPreferenceMode::DEFAULT,
-    ): void
-    {
-        $this->set($context, $notificationKey, $channel, true, $mode);
+    ): void {
+        $this->set($administrator, $context, $notificationKey, $channel, true, $mode);
     }
 
     public function disable(
-        NotificationContext               $context,
-        string                            $notificationKey,
-        string                            $channel,
+        object $administrator,
+        NotificationContext $context,
+        string $notificationKey,
+        string $channel,
         NotificationContextPreferenceMode $mode = NotificationContextPreferenceMode::DEFAULT,
-    ): void
-    {
-        $this->set($context, $notificationKey, $channel, false, $mode);
+    ): void {
+        $this->set($administrator, $context, $notificationKey, $channel, false, $mode);
     }
 
     public function reset(
+        object $administrator,
         NotificationContext $context,
-        string              $notificationKey,
-        string              $channel,
-    ): void
-    {
-        $this->assertPolicySupported($context, $notificationKey, $channel);
+        string $notificationKey,
+        string $channel,
+    ): void {
+        $this->assertPolicySupported($administrator, $context, $notificationKey, $channel);
         $this->store->forget($context, $notificationKey, $channel);
     }
 
     /** @return array<string, array<string, NotificationContextPolicyInspection>> */
-    public function inspect(NotificationContext $context): array
+    public function inspect(object $administrator, NotificationContext $context): array
     {
+        $this->assertPolicyAuthorized($administrator, $context);
         $policies = [];
 
         foreach ($this->definitions->all() as $definition) {
-            if (!$definition->supportsContext($context)) {
+            if (! $definition->supportsContext($context)) {
                 continue;
             }
 
@@ -101,20 +102,21 @@ final readonly class NotificationContextPreferenceManager
     }
 
     private function assertPolicySupported(
+        object $administrator,
         NotificationContext $context,
-        string              $notificationKey,
-        string              $channel,
-    ): NotificationDefinition
-    {
+        string $notificationKey,
+        string $channel,
+    ): void {
+        $this->assertPolicyAuthorized($administrator, $context);
         $definition = $this->definitions->get($notificationKey);
 
-        if (!$definition->hasChannel($channel)) {
+        if (! $definition->hasChannel($channel)) {
             throw new InvalidArgumentException(
                 "Channel [{$channel}] is not available for notification type [{$notificationKey}].",
             );
         }
 
-        if (!$definition->supportsContext($context)) {
+        if (! $definition->supportsContext($context)) {
             throw new InvalidArgumentException(
                 "Notification type [{$notificationKey}] does not support context type [{$context->type}].",
             );
@@ -125,7 +127,14 @@ final readonly class NotificationContextPreferenceManager
                 "Channel [{$channel}] cannot have a context policy because it is mandatory for notification type [{$notificationKey}].",
             );
         }
+    }
 
-        return $definition;
+    private function assertPolicyAuthorized(object $administrator, NotificationContext $context): void
+    {
+        if (! $this->authorizer->authorize($administrator, $context)) {
+            throw new LogicException(
+                "The administrator is not authorized to manage notification context [{$context->key()}].",
+            );
+        }
     }
 }

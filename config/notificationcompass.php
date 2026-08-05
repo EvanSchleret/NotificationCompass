@@ -9,6 +9,9 @@ return [
     'definition_providers' => [],
     'default' => false,
     'channels' => [],
+    'authorization' => [
+        'strict' => false,
+    ],
     'cache' => [
         'enabled' => true,
         'store' => null,

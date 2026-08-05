@@ -56,13 +56,15 @@ final readonly class NotificationPreferenceManager
         return $this->definitions->all();
     }
 
-    public function explicitPreferences(): array
+    public function explicitPreferences(?NotificationContext $context = null): array
     {
+        $this->assertContextAuthorized($context);
+
         if (! $this->store instanceof InspectableNotificationPreferenceStore) {
             return [];
         }
 
-        return $this->store->all($this->notifiable);
+        return $this->store->all($this->notifiable, $context);
     }
 
     public function effectivePreferences(?NotificationContext $context = null): array

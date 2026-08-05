@@ -116,10 +116,11 @@ final class EloquentNotificationPreferenceStore implements MutableNotificationPr
         ));
     }
 
-    public function all(object $notifiable): array
+    public function all(object $notifiable, ?NotificationContext $context = null): array
     {
         return NotificationPreference::query()
             ->where($this->identity($notifiable))
+            ->where('context_key', $this->contextKey($context))
             ->orderBy('notification_key')
             ->orderBy('channel')
             ->get(['notification_key', 'channel', 'context_key', 'enabled'])

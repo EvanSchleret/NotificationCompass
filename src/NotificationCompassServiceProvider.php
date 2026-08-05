@@ -9,6 +9,7 @@ use Illuminate\Contracts\Cache\Factory as CacheFactory;
 use Illuminate\Notifications\Events\NotificationSending;
 use Illuminate\Support\ServiceProvider;
 use NotificationCompass\Contracts\NotificationContextAuthorizer;
+use NotificationCompass\Contracts\NotificationContextPolicyAuthorizer;
 use NotificationCompass\Contracts\NotificationContextPreferenceStore;
 use NotificationCompass\Contracts\NotificationContextResolver;
 use NotificationCompass\Contracts\NotificationDefinitionProvider;
@@ -26,8 +27,11 @@ use NotificationCompass\Stores\EloquentNotificationPreferenceStore;
 use NotificationCompass\Stores\EloquentNotificationContextPreferenceStore;
 use NotificationCompass\Support\ConventionNotificationContextResolver;
 use NotificationCompass\Support\NullNotificationContextAuthorizer;
+use NotificationCompass\Support\NullNotificationContextPolicyAuthorizer;
 use NotificationCompass\Support\NullNotificationPreferenceCache;
 use NotificationCompass\Support\LaravelNotificationPreferenceCache;
+use NotificationCompass\Support\StrictNotificationContextAuthorizer;
+use NotificationCompass\Support\StrictNotificationContextPolicyAuthorizer;
 
 final class NotificationCompassServiceProvider extends ServiceProvider
 {
@@ -36,7 +40,16 @@ final class NotificationCompassServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(__DIR__ . '/../config/notificationcompass.php', 'notificationcompass');
 
         $this->app->singleton(NotificationDefinitionRegistry::class);
-        $this->app->singleton(NotificationContextAuthorizer::class, NullNotificationContextAuthorizer::class);
+        $this->app->singleton(NotificationContextAuthorizer::class, function (Application $app): NotificationContextAuthorizer {
+            return (bool) $app['config']->get('notificationcompass.authorization.strict', false)
+                ? new StrictNotificationContextAuthorizer()
+                : new NullNotificationContextAuthorizer();
+        });
+        $this->app->singleton(NotificationContextPolicyAuthorizer::class, function (Application $app): NotificationContextPolicyAuthorizer {
+            return (bool) $app['config']->get('notificationcompass.authorization.strict', false)
+                ? new StrictNotificationContextPolicyAuthorizer()
+                : new NullNotificationContextPolicyAuthorizer();
+        });
         $this->app->singleton(NotificationContextResolver::class, ConventionNotificationContextResolver::class);
         $this->app->singleton(
             MutableNotificationContextPreferenceStore::class,
