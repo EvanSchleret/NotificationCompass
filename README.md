@@ -6,11 +6,22 @@ It helps applications decide whether a notification should be sent to a user, th
 
 ## Status
 
-This package is currently under development. The public API and supported Laravel versions may change before the first stable release.
+NotificationCompass follows the v1.x API contract. Breaking changes are reserved for a future major release.
 
 ## Installation
 
-Installation will be available through Composer once the package is released. Until then, follow the repository's development instructions.
+Install the latest v1.x release with Composer:
+
+```bash
+composer require evanschleret/notificationcompass
+```
+
+To test unreleased changes, configure the repository and require the `dev-main` branch explicitly:
+
+```bash
+composer config repositories.notificationcompass vcs https://github.com/EvanSchleret/NotificationCompass
+composer require evanschleret/notificationcompass:dev-main
+```
 
 ## Documentation
 

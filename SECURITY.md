@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-NotificationCompass is currently under active development and has no released versions. Security fixes will be considered for the latest supported release once releases are published.
+Security fixes are provided for the latest supported v1.x release. Development branches and unsupported older major versions do not receive security fixes.
 
 ## Reporting a vulnerability
 
