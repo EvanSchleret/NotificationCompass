@@ -8,6 +8,7 @@ enum NotificationDecisionReason: string
 {
     case MANDATORY = 'mandatory';
     case CHANNEL_UNDECLARED = 'channel_undeclared';
+    case CONTEXT_REQUIRED = 'context_required';
     case CONTEXT_UNSUPPORTED = 'context_unsupported';
     case CONTEXT_UNAUTHORIZED = 'context_unauthorized';
     case USER_CONTEXT = 'user_context';

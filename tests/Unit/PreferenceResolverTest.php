@@ -19,6 +19,16 @@ use PHPUnit\Framework\TestCase;
 
 final class PreferenceResolverTest extends TestCase
 {
+    public function test_required_context_can_be_declared_from_configuration(): void
+    {
+        $definition = NotificationDefinition::fromConfig('event.booking_created', [
+            'channels' => ['mail'],
+            'requires_context' => true,
+        ]);
+
+        self::assertTrue($definition->requiresContext);
+    }
+
     public function test_mandatory_rules_win_over_user_preferences(): void
     {
         $registry = new NotificationDefinitionRegistry();
@@ -36,6 +46,29 @@ final class PreferenceResolverTest extends TestCase
         self::assertSame(NotificationDecisionReason::MANDATORY, $result->reason);
         self::assertSame('mandatory', $result->source);
         self::assertFalse($result->isModifiable());
+    }
+
+    public function test_required_context_blocks_global_preferences_when_context_is_missing(): void
+    {
+        $registry = new NotificationDefinitionRegistry();
+        $registry->register(new NotificationDefinition(
+            'event.booking_created',
+            ['mail'],
+            defaults: ['mail' => true],
+            requiresContext: true,
+        ));
+
+        $result = $this->resolver($registry)->resolve(
+            new class {},
+            'event.booking_created',
+            'mail',
+            null,
+            new InMemoryPreferenceStore(true),
+        );
+
+        self::assertFalse($result->enabled);
+        self::assertSame(NotificationDecisionReason::CONTEXT_REQUIRED, $result->reason);
+        self::assertSame('context_required', $result->source);
     }
 
     public function test_context_preferences_win_over_global_preferences_and_defaults(): void

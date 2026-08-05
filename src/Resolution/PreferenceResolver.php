@@ -58,6 +58,10 @@ final readonly class PreferenceResolver
     ): ResolvedPreference {
         $definition = $this->definitions->get($notificationKey);
 
+        if ($definition->requiresContext && $context === null) {
+            return new ResolvedPreference(false, NotificationDecisionReason::CONTEXT_REQUIRED);
+        }
+
         if ($definition->isMandatoryFor($channel)) {
             return new ResolvedPreference(true, NotificationDecisionReason::MANDATORY, true);
         }

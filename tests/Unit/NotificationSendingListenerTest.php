@@ -108,6 +108,36 @@ final class NotificationSendingListenerTest extends TestCase
         self::assertSame(NotificationDecisionReason::CONTEXT_UNAUTHORIZED, $result->reason);
         self::assertSame('context_unauthorized', $result->source);
     }
+
+    public function test_notifications_requiring_context_are_not_delivered_without_one(): void
+    {
+        $registry = new NotificationDefinitionRegistry();
+        $registry->register(new NotificationDefinition(
+            'message.received',
+            ['mail'],
+            notificationClass: TestNotification::class,
+            requiresContext: true,
+        ));
+
+        $gate = new NotificationGate(
+            $registry,
+            new TestContextResolver(),
+            new TestPreferenceStore(true),
+            new PreferenceResolver($registry, [], false),
+            new TestContextAuthorizer(),
+        );
+
+        $result = $gate->decision(
+            new TestNotifiable(),
+            new TestNotification(),
+            'mail',
+        );
+
+        self::assertNotNull($result);
+        self::assertFalse($result->enabled);
+        self::assertSame(NotificationDecisionReason::CONTEXT_REQUIRED, $result->reason);
+        self::assertSame('context_required', $result->source);
+    }
 }
 
 final class TestNotification
