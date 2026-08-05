@@ -23,14 +23,17 @@ use NotificationCompass\Concerns\HasNotificationPreferences;
 use NotificationCompass\Contracts\NotificationContextAuthorizer;
 use NotificationCompass\Contracts\NotificationContextPolicyAuthorizer;
 use NotificationCompass\Contracts\MutableNotificationContextPreferenceStore;
+use NotificationCompass\Contracts\NotificationDeliveryDecisionCustomizer;
 use NotificationCompass\Definitions\NotificationDefinitionRegistry;
 use NotificationCompass\Contracts\NotificationDefinitionProvider;
 use NotificationCompass\Definitions\NotificationDefinition;
+use NotificationCompass\Events\NotificationDeliveryDecided;
 use NotificationCompass\Events\NotificationPreferenceChanged;
 use NotificationCompass\Events\NotificationPreferenceChangeType;
 use NotificationCompass\Managers\NotificationContextPreferenceManager;
 use NotificationCompass\NotificationCompassServiceProvider;
 use NotificationCompass\Resolution\NotificationDecisionReason;
+use NotificationCompass\Resolution\ResolvedPreference;
 use NotificationCompass\Stores\EloquentNotificationContextPreferenceStore;
 use NotificationCompass\Stores\EloquentNotificationPreferenceStore;
 use NotificationCompass\ValueObjects\NotificationContext;
@@ -84,6 +87,7 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
             'security.alert' => [
                 'channels' => ['mail', 'database'],
                 'mandatory_channels' => ['mail'],
+                'notification_class' => TestMandatoryNotification::class,
                 'channel_options' => [
                     'database' => ['default' => true],
                 ],
@@ -493,6 +497,78 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
         self::assertFalse($result);
     }
 
+    public function test_delivery_decision_events_expose_the_final_resolution(): void
+    {
+        Event::fake([NotificationDeliveryDecided::class]);
+        $user = TestUser::query()->create();
+        $user->disableNotification('event.booking_created', 'mail');
+
+        $result = $this->app['events']->dispatch(
+            new NotificationSending($user, new TestConfiguredNotification(), 'mail'),
+            [],
+            true,
+        );
+
+        self::assertFalse($result);
+        Event::assertDispatched(NotificationDeliveryDecided::class, static function (
+            NotificationDeliveryDecided $event,
+        ): bool {
+            return $event->notifiable instanceof TestUser
+                && $event->notification instanceof TestConfiguredNotification
+                && $event->channel === 'mail'
+                && $event->context === null
+                && $event->definition?->key === 'event.booking_created'
+                && ! $event->preference->enabled
+                && $event->preference->reason === NotificationDecisionReason::USER_GLOBAL
+                && ! $event->customized
+                && $event->originalEnabled === null;
+        });
+    }
+
+    public function test_delivery_decision_customizer_can_change_modifiable_decisions(): void
+    {
+        Event::fake([NotificationDeliveryDecided::class]);
+        $this->app->instance(
+            NotificationDeliveryDecisionCustomizer::class,
+            new TestDeliveryDecisionCustomizer(true),
+        );
+        $this->app->forgetInstance(\NotificationCompass\Resolution\NotificationGate::class);
+        $user = TestUser::query()->create();
+
+        $result = $this->app['events']->dispatch(
+            new NotificationSending($user, new TestConfiguredNotification(), 'mail'),
+            [],
+            true,
+        );
+
+        self::assertTrue($result);
+        Event::assertDispatched(NotificationDeliveryDecided::class, static function (
+            NotificationDeliveryDecided $event,
+        ): bool {
+            return $event->preference->enabled
+                && $event->customized
+                && $event->originalEnabled === false;
+        });
+    }
+
+    public function test_delivery_decision_customizer_cannot_override_mandatory_decisions(): void
+    {
+        $this->app->instance(
+            NotificationDeliveryDecisionCustomizer::class,
+            new TestDeliveryDecisionCustomizer(false),
+        );
+        $this->app->forgetInstance(\NotificationCompass\Resolution\NotificationGate::class);
+        $user = TestUser::query()->create();
+
+        $result = $this->app['events']->dispatch(
+            new NotificationSending($user, new TestMandatoryNotification(), 'mail'),
+            [],
+            true,
+        );
+
+        self::assertTrue($result);
+    }
+
     public function test_user_preference_changes_dispatch_events_with_previous_and_new_values(): void
     {
         Event::fake();
@@ -886,6 +962,10 @@ final class TestConfiguredNotification extends Notification
 {
 }
 
+final class TestMandatoryNotification extends Notification
+{
+}
+
 final class TestUnregisteredNotification extends Notification
 {
 }
@@ -970,6 +1050,24 @@ final class TestDefinitionProvider implements NotificationDefinitionProvider
     public function register(NotificationDefinitionRegistry $registry): void
     {
         $registry->register(new NotificationDefinition('digest.weekly', ['mail'], optIn: true));
+    }
+}
+
+final class TestDeliveryDecisionCustomizer implements NotificationDeliveryDecisionCustomizer
+{
+    public function __construct(private readonly bool $enabled)
+    {
+    }
+
+    public function customize(
+        object $notifiable,
+        object $notification,
+        string $channel,
+        ?NotificationContext $context,
+        NotificationDefinition $definition,
+        ResolvedPreference $preference,
+    ): ?bool {
+        return $this->enabled;
     }
 }
 
