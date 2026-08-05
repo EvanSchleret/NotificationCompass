@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace NotificationCompass\Resolution;
 
+use LogicException;
 use NotificationCompass\Contracts\NotificationContextResolver;
 use NotificationCompass\Contracts\NotificationContextAuthorizer;
 use NotificationCompass\Contracts\NotificationPreferenceStore;
@@ -18,6 +19,7 @@ final readonly class NotificationGate
         private NotificationPreferenceStore $preferences,
         private PreferenceResolver $resolver,
         private ?NotificationContextAuthorizer $authorizer = null,
+        private UnknownNotificationBehavior $unknownNotificationBehavior = UnknownNotificationBehavior::ALLOW,
     ) {
     }
 
@@ -29,7 +31,16 @@ final readonly class NotificationGate
     ): ?ResolvedPreference {
         $definition = $this->definitions->forNotification($notification);
         if ($definition === null) {
-            return null;
+            return match ($this->unknownNotificationBehavior) {
+                UnknownNotificationBehavior::ALLOW => null,
+                UnknownNotificationBehavior::DENY => new ResolvedPreference(
+                    false,
+                    NotificationDecisionReason::UNKNOWN_NOTIFICATION,
+                ),
+                UnknownNotificationBehavior::THROW_EXCEPTION => throw new LogicException(
+                    'Notification [' . get_class($notification) . '] is not registered in NotificationDefinitionRegistry.',
+                ),
+            };
         }
 
         if (! $definition->hasChannel($channel)) {

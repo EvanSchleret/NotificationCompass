@@ -9,6 +9,7 @@ return [
     'definition_providers' => [],
     'default' => false,
     'channels' => [],
+    'unknown_notifications' => 'allow',
     'authorization' => [
         'strict' => false,
     ],

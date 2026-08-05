@@ -6,6 +6,7 @@ namespace NotificationCompass\Resolution;
 
 enum NotificationDecisionReason: string
 {
+    case UNKNOWN_NOTIFICATION = 'unknown_notification';
     case MANDATORY = 'mandatory';
     case CHANNEL_UNDECLARED = 'channel_undeclared';
     case CONTEXT_REQUIRED = 'context_required';

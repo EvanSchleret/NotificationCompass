@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace NotificationCompass\Tests\Unit;
 
 use Illuminate\Notifications\Events\NotificationSending;
+use LogicException;
 use NotificationCompass\Contracts\NotificationContextAuthorizer;
 use NotificationCompass\Contracts\NotificationContextResolver;
 use NotificationCompass\Contracts\NotificationPreferenceStore;
@@ -14,6 +15,7 @@ use NotificationCompass\Listeners\NotificationSendingListener;
 use NotificationCompass\Resolution\NotificationDecisionReason;
 use NotificationCompass\Resolution\PreferenceResolver;
 use NotificationCompass\Resolution\NotificationGate;
+use NotificationCompass\Resolution\UnknownNotificationBehavior;
 use NotificationCompass\ValueObjects\NotificationContext;
 use PHPUnit\Framework\TestCase;
 
@@ -55,6 +57,42 @@ final class NotificationSendingListenerTest extends TestCase
         $allowed = $listener->handle(new NotificationSending(new TestNotifiable(), new TestNotification(), 'mail'));
 
         self::assertTrue($allowed);
+    }
+
+    public function test_unknown_notifications_can_be_denied_explicitly(): void
+    {
+        $registry = new NotificationDefinitionRegistry();
+        $gate = new NotificationGate(
+            $registry,
+            new TestContextResolver(),
+            new TestPreferenceStore(true),
+            new PreferenceResolver($registry, [], false),
+            new TestContextAuthorizer(),
+            UnknownNotificationBehavior::DENY,
+        );
+
+        $result = $gate->decision(new TestNotifiable(), new TestNotification(), 'mail');
+
+        self::assertNotNull($result);
+        self::assertFalse($result->enabled);
+        self::assertSame(NotificationDecisionReason::UNKNOWN_NOTIFICATION, $result->reason);
+        self::assertSame('unknown_notification', $result->source);
+    }
+
+    public function test_unknown_notifications_can_throw_explicitly(): void
+    {
+        $registry = new NotificationDefinitionRegistry();
+        $gate = new NotificationGate(
+            $registry,
+            new TestContextResolver(),
+            new TestPreferenceStore(true),
+            new PreferenceResolver($registry, [], false),
+            new TestContextAuthorizer(),
+            UnknownNotificationBehavior::THROW_EXCEPTION,
+        );
+
+        $this->expectException(LogicException::class);
+        $gate->decision(new TestNotifiable(), new TestNotification(), 'mail');
     }
 
     public function test_undeclared_channels_are_not_delivered(): void

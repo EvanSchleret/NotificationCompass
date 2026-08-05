@@ -23,6 +23,7 @@ use NotificationCompass\Listeners\NotificationSendingListener;
 use NotificationCompass\Managers\NotificationContextPreferenceManager;
 use NotificationCompass\Resolution\PreferenceResolver;
 use NotificationCompass\Resolution\NotificationGate;
+use NotificationCompass\Resolution\UnknownNotificationBehavior;
 use NotificationCompass\Stores\EloquentNotificationPreferenceStore;
 use NotificationCompass\Stores\EloquentNotificationContextPreferenceStore;
 use NotificationCompass\Support\ConventionNotificationContextResolver;
@@ -84,7 +85,26 @@ final class NotificationCompassServiceProvider extends ServiceProvider
                 $app->make(NotificationPreferenceCache::class),
             );
         });
-        $this->app->singleton(NotificationGate::class);
+        $this->app->singleton(NotificationGate::class, function (Application $app): NotificationGate {
+            $behavior = UnknownNotificationBehavior::tryFrom(
+                (string) $app['config']->get('notificationcompass.unknown_notifications', 'allow'),
+            );
+
+            if ($behavior === null) {
+                throw new \InvalidArgumentException(
+                    'notificationcompass.unknown_notifications must be allow, deny, or throw.',
+                );
+            }
+
+            return new NotificationGate(
+                $app->make(NotificationDefinitionRegistry::class),
+                $app->make(NotificationContextResolver::class),
+                $app->make(NotificationPreferenceStore::class),
+                $app->make(PreferenceResolver::class),
+                $app->make(NotificationContextAuthorizer::class),
+                $behavior,
+            );
+        });
     }
 
     private function registerConfiguredDefinitions(): void

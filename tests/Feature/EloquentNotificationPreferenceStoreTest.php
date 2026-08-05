@@ -477,6 +477,21 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
         self::assertFalse($result);
     }
 
+    public function test_unknown_notification_behavior_can_be_configured_to_deny(): void
+    {
+        $this->app['config']->set('notificationcompass.unknown_notifications', 'deny');
+        $this->app->forgetInstance(\NotificationCompass\Resolution\NotificationGate::class);
+        $user = TestUser::query()->create();
+
+        $result = $this->app['events']->dispatch(
+            new NotificationSending($user, new TestUnregisteredNotification(), 'mail'),
+            [],
+            true,
+        );
+
+        self::assertFalse($result);
+    }
+
     public function test_user_preference_changes_dispatch_events_with_previous_and_new_values(): void
     {
         Event::fake();
@@ -825,6 +840,10 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
 }
 
 final class TestConfiguredNotification extends Notification
+{
+}
+
+final class TestUnregisteredNotification extends Notification
 {
 }
 
