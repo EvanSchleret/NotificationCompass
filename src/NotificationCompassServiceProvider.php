@@ -19,6 +19,7 @@ use NotificationCompass\Contracts\MutableNotificationContextPreferenceStore;
 use NotificationCompass\Definitions\NotificationDefinition;
 use NotificationCompass\Definitions\NotificationDefinitionRegistry;
 use NotificationCompass\Listeners\NotificationSendingListener;
+use NotificationCompass\Managers\NotificationContextPreferenceManager;
 use NotificationCompass\Resolution\PreferenceResolver;
 use NotificationCompass\Resolution\NotificationGate;
 use NotificationCompass\Stores\EloquentNotificationPreferenceStore;
@@ -45,6 +46,7 @@ final class NotificationCompassServiceProvider extends ServiceProvider
             MutableNotificationContextPreferenceStore::class,
             NotificationContextPreferenceStore::class,
         );
+        $this->app->singleton(NotificationContextPreferenceManager::class);
         $this->app->singleton(MutableNotificationPreferenceStore::class, EloquentNotificationPreferenceStore::class);
         $this->app->alias(MutableNotificationPreferenceStore::class, NotificationPreferenceStore::class);
         $this->app->singleton(NotificationPreferenceCache::class, function (Application $app): NotificationPreferenceCache {

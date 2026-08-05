@@ -26,6 +26,7 @@ use NotificationCompass\Contracts\NotificationDefinitionProvider;
 use NotificationCompass\Definitions\NotificationDefinition;
 use NotificationCompass\Events\NotificationPreferenceChanged;
 use NotificationCompass\Events\NotificationPreferenceChangeType;
+use NotificationCompass\Managers\NotificationContextPreferenceManager;
 use NotificationCompass\NotificationCompassServiceProvider;
 use NotificationCompass\Resolution\NotificationDecisionReason;
 use NotificationCompass\Stores\EloquentNotificationContextPreferenceStore;
@@ -205,6 +206,90 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
             'mail',
             $context,
         ));
+    }
+
+    public function test_context_policy_manager_handles_policy_lifecycle_and_inspection(): void
+    {
+        $manager = $this->app->make(NotificationContextPreferenceManager::class);
+        $context = new NotificationContext('organization', 10);
+
+        self::assertNull($manager->get($context, 'event.contextual', 'mail'));
+
+        $manager->disable(
+            $context,
+            'event.contextual',
+            'mail',
+            NotificationContextPreferenceMode::DEFAULT,
+        );
+
+        $policy = $manager->get($context, 'event.contextual', 'mail');
+        self::assertNotNull($policy);
+        self::assertFalse($policy->enabled);
+        self::assertSame(NotificationContextPreferenceMode::DEFAULT, $policy->mode);
+
+        $inspection = $manager->inspect($context);
+        $contextPolicy = $inspection['event.contextual']['mail'];
+        self::assertTrue($contextPolicy->isConfigured());
+        self::assertTrue($contextPolicy->modifiable);
+        self::assertFalse($contextPolicy->enabled);
+        self::assertSame(NotificationContextPreferenceMode::DEFAULT, $contextPolicy->mode);
+
+        $manager->enable(
+            $context,
+            'event.contextual',
+            'mail',
+            NotificationContextPreferenceMode::ENFORCED,
+        );
+
+        self::assertTrue($manager->get($context, 'event.contextual', 'mail')?->enabled);
+        self::assertSame(
+            NotificationContextPreferenceMode::ENFORCED,
+            $manager->inspect($context)['event.contextual']['mail']->mode,
+        );
+
+        $manager->reset($context, 'event.contextual', 'mail');
+
+        self::assertNull($manager->get($context, 'event.contextual', 'mail'));
+        self::assertFalse($manager->inspect($context)['event.contextual']['mail']->isConfigured());
+    }
+
+    public function test_context_policy_manager_rejects_undeclared_channels(): void
+    {
+        $manager = $this->app->make(NotificationContextPreferenceManager::class);
+
+        $this->expectException(InvalidArgumentException::class);
+        $manager->set(
+            new NotificationContext('organization', 10),
+            'event.contextual',
+            'database',
+            true,
+        );
+    }
+
+    public function test_context_policy_manager_rejects_unsupported_contexts(): void
+    {
+        $manager = $this->app->make(NotificationContextPreferenceManager::class);
+
+        $this->expectException(InvalidArgumentException::class);
+        $manager->set(
+            new NotificationContext('project', 10),
+            'event.contextual',
+            'mail',
+            true,
+        );
+    }
+
+    public function test_context_policy_manager_rejects_mandatory_channels(): void
+    {
+        $manager = $this->app->make(NotificationContextPreferenceManager::class);
+
+        $this->expectException(LogicException::class);
+        $manager->set(
+            new NotificationContext('organization', 10),
+            'security.alert',
+            'mail',
+            true,
+        );
     }
 
     public function test_context_preferences_are_isolated_by_context_key(): void
