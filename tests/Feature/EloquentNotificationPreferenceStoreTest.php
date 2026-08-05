@@ -17,6 +17,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Contracts\Notifications\Factory as NotificationFactory;
 use Illuminate\Support\Facades\Notification as NotificationFacade;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use NotificationCompass\Concerns\HasNotificationPreferences;
 use NotificationCompass\Contracts\NotificationContextAuthorizer;
@@ -582,6 +583,48 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
                 && $event->oldMode === NotificationContextPreferenceMode::ENFORCED
                 && $event->newMode === null;
         });
+    }
+
+    public function test_preference_change_events_are_dispatched_after_commit(): void
+    {
+        Event::fake();
+        $user = TestUser::query()->create();
+        $context = new NotificationContext('organization', 10);
+        $userStore = new EloquentNotificationPreferenceStore();
+        $contextStore = new EloquentNotificationContextPreferenceStore();
+
+        DB::transaction(function () use ($context, $contextStore, $user, $userStore): void {
+            $userStore->set($user, 'event.booking_created', 'mail', true, null);
+            $contextStore->set(
+                $context,
+                'event.contextual',
+                'mail',
+                false,
+                NotificationContextPreferenceMode::DEFAULT,
+            );
+
+            Event::assertNotDispatched(NotificationPreferenceChanged::class);
+        });
+
+        Event::assertDispatchedTimes(NotificationPreferenceChanged::class, 2);
+    }
+
+    public function test_preference_change_events_are_not_dispatched_after_rollback(): void
+    {
+        Event::fake();
+        $user = TestUser::query()->create();
+        $store = new EloquentNotificationPreferenceStore();
+
+        try {
+            DB::transaction(function () use ($store, $user): void {
+                $store->set($user, 'event.booking_created', 'mail', true, null);
+
+                throw new \RuntimeException('Rollback the preference transaction.');
+            });
+        } catch (\RuntimeException) {
+        }
+
+        Event::assertNotDispatched(NotificationPreferenceChanged::class);
     }
 
     public function test_definitions_are_loaded_from_configuration(): void
