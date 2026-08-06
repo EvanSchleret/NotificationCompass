@@ -179,6 +179,16 @@ final class EloquentNotificationPreferenceStoreTest extends TestCase
         self::assertTrue($user->canReceiveNotification(new TestConfiguredNotification(), 'mail'));
     }
 
+    public function test_preferences_use_a_mysql_safe_notifiable_index_name(): void
+    {
+        $indexes = Schema::getIndexes(config('notificationcompass.table'));
+
+        self::assertContains(
+            'notificationcompass_preferences_notifiable_index',
+            array_column($indexes, 'name'),
+        );
+    }
+
     public function test_context_preferences_can_apply_a_policy_to_all_members(): void
     {
         $context = new NotificationContext('organization', 10);

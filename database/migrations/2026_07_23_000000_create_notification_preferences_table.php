@@ -27,7 +27,10 @@ return new class extends Migration
                 'channel',
                 'context_key',
             ], 'notificationcompass_preferences_unique');
-            $table->index(['notifiable_type', 'notifiable_id']);
+            $table->index(
+                ['notifiable_type', 'notifiable_id'],
+                'notificationcompass_preferences_notifiable_index',
+            );
         });
     }
 
